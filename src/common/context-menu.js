@@ -187,14 +187,14 @@ export function createAnnotationContextMenu(reader, params) {
 		x: params.x,
 		y: params.y,
 		itemGroups: createItemGroup([
-			[
-				(reader._platform === 'zotero' || window.dev) && {
-					label: reader._getString('pdfReader.addToNote'),
-					disabled: !reader._state.enableAddToNote,
-					persistent: true,
-					onCommand: () => reader._onAddToNote(annotations)
-				}
-			],
+			// [
+			// 	(reader._platform === 'zotero' || window.dev) && {
+			// 		label: reader._getString('pdfReader.addToNote'),
+			// 		disabled: !reader._state.enableAddToNote,
+			// 		persistent: true,
+			// 		onCommand: () => reader._onAddToNote(annotations)
+			// 	}
+			// ],
 			colors.map(([label, color]) => ({
 				label: reader._getString(label),
 				disabled: readOnly,

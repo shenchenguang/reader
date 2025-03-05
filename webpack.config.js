@@ -118,10 +118,10 @@ function generateReaderConfig(build) {
 
 	if (build === 'zotero') {
 		config.externals = {
-			react: 'React',
-			'react-dom': 'ReactDOM',
-			'react-intl': 'ReactIntl',
-			'prop-types': 'PropTypes'
+			// react: 'React',
+			// 'react-dom': 'ReactDOM',
+			// 'react-intl': 'ReactIntl',
+			// 'prop-types': 'PropTypes'
 		};
 	}
 	else if (build === 'web') {
