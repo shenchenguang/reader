@@ -43,7 +43,7 @@ function generateReaderConfig(build) {
 								['@babel/preset-env', {
 									useBuiltIns: false,
 									targets: build === 'zotero' || build === 'dev'
-										? { firefox: 115, chrome: 128 }
+										? { firefox: 115, chrome: 108 }
 										: undefined
 								}],
 							],
@@ -117,12 +117,12 @@ function generateReaderConfig(build) {
 	};
 
 	if (build === 'zotero') {
-		config.externals = {
-			// react: 'React',
-			// 'react-dom': 'ReactDOM',
-			// 'react-intl': 'ReactIntl',
-			// 'prop-types': 'PropTypes'
-		};
+		// config.externals = {
+		// 	react: 'React',
+		// 	'react-dom': 'ReactDOM',
+		// 	'react-intl': 'ReactIntl',
+		// 	'prop-types': 'PropTypes'
+		// };
 	}
 	else if (build === 'web') {
 		config.externals = {

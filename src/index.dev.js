@@ -94,13 +94,18 @@ async function createReader() {
 			console.log(`Change text selection annotation mode to '${mode}'`);
 		}
 	});
-	reader.enableAddToNote(true);
+	reader.enableAddToNote(false);
 	reader.setSelectedTextMenu([
-		{ label: "Add to note", onCommand: annotation => console.log(annotation) },
+		{ label: "test1", onCommand: annotation => console.log(annotation) },
 		{ label: "Copy", onCommand: annotation => alert(annotation) },
 		{ label: "Highlight", onCommand: annotation => alert(annotation) }
 	]);
 	window._reader = reader;
+	window._reader._annotationManager._onSave = async function (annotations) {
+		console.log('Save annotations1111', annotations);
+	};
+	console.log('Reader initialized', window._reader._annotationManager._onSave);
+
 	await reader.initializedPromise;
 }
 
