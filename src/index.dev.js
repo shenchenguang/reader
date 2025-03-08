@@ -41,6 +41,9 @@ async function createReader() {
 		authorName: 'John',
 		showAnnotations: true,
 		// platform: 'web',
+		platform: 'zetero',
+
+		lightTheme: true,
 		// password: 'test',
 		onOpenContextMenu(params) {
 			reader.openContextMenu(params);
@@ -92,6 +95,11 @@ async function createReader() {
 		}
 	});
 	reader.enableAddToNote(true);
+	reader.setSelectedTextMenu([
+		{ label: "Add to note", onCommand: annotation => console.log(annotation) },
+		{ label: "Copy", onCommand: annotation => alert(annotation) },
+		{ label: "Highlight", onCommand: annotation => alert(annotation) }
+	]);
 	window._reader = reader;
 	await reader.initializedPromise;
 }

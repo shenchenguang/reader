@@ -44,19 +44,27 @@ function SelectionPopup(props) {
 					className={cx('highlight', { active: props.textSelectionAnnotationMode === 'highlight' })}
 					title={intl.formatMessage({ id: 'pdfReader.highlightText' })}
 					onClick={() => props.onChangeTextSelectionAnnotationMode('highlight')}
-				><IconHighlight/></button>
+				><IconHighlight /></button>
 				<button
 					tabIndex={-1}
 					className={cx('underline', { active: props.textSelectionAnnotationMode === 'underline' })}
 					title={intl.formatMessage({ id: 'pdfReader.underlineText' })}
 					onClick={() => props.onChangeTextSelectionAnnotationMode('underline')}
-				><IconUnderline/></button>
+				><IconUnderline /></button>
 			</div>
 			{props.enableAddToNote &&
 				<button className="toolbar-button wide-button" data-tabstop={1} onClick={handleAddToNote}>
-					<FormattedMessage id="pdfReader.addToNote"/>
+					<FormattedMessage id="pdfReader.addToNote" />
 				</button>}
-			<CustomSections type="TextSelectionPopup" annotation={props.params.annotation}/>
+
+			{props.selectedTextMenu && props.selectedTextMenu.map((btnItem, index) => (
+				<button className="toolbar-button wide-button" data-tabstop={index} key={index + 2} onClick={() => btnItem.onCommand(props.params.annotation)}>
+					{btnItem.label}
+				</button>
+			))}
+			<div>
+			</div>
+			<CustomSections type="TextSelectionPopup" annotation={props.params.annotation} />
 		</ViewPopup>
 	);
 }

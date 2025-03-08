@@ -175,6 +175,7 @@ class Reader {
 			toolbarPlaceholderWidth: options.toolbarPlaceholderWidth || 0,
 			showContextPaneToggle: options.showContextPaneToggle,
 			enableAddToNote: false,
+			selectedTextMenu: [],
 			labelPopup: null,
 			passwordPopup: null,
 			printPopup: null,
@@ -712,6 +713,10 @@ class Reader {
 
 	enableAddToNote(enable) {
 		this._updateState({ enableAddToNote: enable });
+	}
+
+	setSelectedTextMenu(selectedTextMenu) {
+		this._updateState({ selectedTextMenu });
 	}
 
 	setAnnotations(annotations) {

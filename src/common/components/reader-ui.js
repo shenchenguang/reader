@@ -56,6 +56,7 @@ function View(props) {
 					onAddToNote={props.onAddToNote}
 					onAddAnnotation={props.onAddAnnotation}
 					onChangeTextSelectionAnnotationMode={props.onChangeTextSelectionAnnotationMode}
+					selectedTextMenu={props.state.selectedTextMenu}
 				/>
 			}
 			{state[name + 'ViewAnnotationPopup']
