@@ -117,12 +117,25 @@ function generateReaderConfig(build) {
 	};
 
 	if (build === 'zotero') {
-		// config.externals = {
-		// 	react: 'React',
-		// 	'react-dom': 'ReactDOM',
-		// 	'react-intl': 'ReactIntl',
-		// 	'prop-types': 'PropTypes'
-		// };
+		config.externals = {
+			react: 'React',
+			'react-dom': 'ReactDOM',
+			'react-intl': 'ReactIntl',
+			'prop-types': 'PropTypes'
+		};
+		config.plugins.push(
+			new CopyWebpackPlugin({
+				patterns: [
+					{ from: 'node_modules/react/umd/react.production.min.js', to: './react.js' },
+					{ from: 'node_modules/react-dom/umd/react-dom.production.min.js', to: './react-dom.js' },
+					{ from: 'src/static/react-intl.min.js', to: './react-intl.js' },
+					{ from: 'node_modules/prop-types/prop-types.js', to: './prop-types.js' }
+				],
+				options: {
+
+				}
+			})
+		);
 	}
 	else if (build === 'web') {
 		config.externals = {
