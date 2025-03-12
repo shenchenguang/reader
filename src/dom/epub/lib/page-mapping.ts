@@ -6,22 +6,22 @@ import {
 	lengthenCFI,
 	shortenCFI
 } from "../cfi";
-import { PersistentRange } from "../../common/lib/range";
+import { moveRangeEndsIntoTextNodes, PersistentRange } from "../../common/lib/range";
 
 class PageMapping {
 	static generate(view: EPUBView): PageMapping {
-		let mapping = new PageMapping(view);
+		let mapping = new PageMapping();
 		let sectionBodies = view.renderers.map(renderer => renderer.body);
 		mapping._addPhysicalPages(sectionBodies);
 		if (!mapping._tree.length) {
 			mapping._addEPUBLocations(sectionBodies);
 		}
-		mapping._freeze();
+		mapping._freeze(view);
 		return mapping;
 	}
 
 	static load(saved: string, view: EPUBView): PageMapping | null {
-		let mapping = new PageMapping(view);
+		let mapping = new PageMapping();
 
 		let obj = JSON.parse(saved);
 		if (!obj) {
@@ -42,12 +42,12 @@ class PageMapping {
 			.filter(([range, label]) => !!range && typeof label === 'string')
 			.map(([range, label]) => [new PersistentRange(range), label]) as [PersistentRange, string][]);
 		mapping._isPhysical = obj.isPhysical;
-		mapping._freeze();
+		mapping._freeze(view);
 
 		return mapping;
 	}
 
-	static readonly VERSION = 12;
+	static readonly VERSION = 13;
 
 	private readonly _tree = new BTree<PersistentRange, string>(
 		undefined,
@@ -59,10 +59,9 @@ class PageMapping {
 
 	private _isPhysical = false;
 
-	private _view: EPUBView;
-
-	private constructor(view: EPUBView) {
-		this._view = view;
+	// eslint-disable-next-line no-useless-constructor
+	private constructor() {
+		// Prevent construction from outside
 	}
 
 	get length(): number {
@@ -78,11 +77,16 @@ class PageMapping {
 			throw new Error('Page mapping already populated');
 		}
 		let startTime = new Date().getTime();
-		let sectionsWithLocations = 0;
-		for (let body of sectionBodies) {
-			for (let matcher of MATCHERS) {
+		let potentialMappings = MATCHERS.map((matcher) => {
+			console.log('Trying matcher', matcher.selector);
+
+			let mapping: [PersistentRange, string][] = [];
+			let score = 0;
+			let sectionsWithMatches = 0;
+			for (let body of sectionBodies) {
 				let elems = body.querySelectorAll(matcher.selector);
 				let successes = 0;
+
 				for (let elem of elems) {
 					let pageNumber = matcher.extract(elem);
 					if (!pageNumber) {
@@ -90,26 +94,78 @@ class PageMapping {
 					}
 					let range = elem.ownerDocument.createRange();
 					range.selectNode(elem);
+					range = moveRangeEndsIntoTextNodes(range);
 					range.collapse(true);
-					this._tree.set(new PersistentRange(range), pageNumber);
+					mapping.push([new PersistentRange(range), pageNumber]);
 					successes++;
 				}
+
 				if (successes) {
-					console.log(`Found ${successes} physical page numbers using selector '${matcher.selector}'`);
-					sectionsWithLocations++;
+					score += successes;
+					sectionsWithMatches++;
 				}
 			}
-		}
-		if (sectionsWithLocations >= sectionBodies.length / 2) {
+
+			// If less than half of all sections have locations, the mapping is bad
+			if (sectionsWithMatches < sectionBodies.length / 2) {
+				console.log(`Aborting due to insufficient sections with page numbers (${sectionsWithMatches}/${sectionBodies.length})`);
+				return { mapping: [], score: 0, matcher };
+			}
+
+			let previous: string | null = null;
+			for (let [, pageNumber] of mapping) {
+				if (previous !== null) {
+					let previousInt = parseInt(previous);
+					let thisInt = parseInt(pageNumber);
+					if (!Number.isNaN(previousInt) && !Number.isNaN(thisInt)) {
+						// If page numbers are decreasing, dock three-quarters of the points
+						if (thisInt < previousInt) {
+							console.log(`Decreasing page numbers: ${previous} -> ${pageNumber}`);
+							score /= 4;
+							break;
+						}
+						// And if they skip more than two pages, dock half
+						if (thisInt > previousInt + 3) {
+							console.log(`Non-continuous page numbers: ${previous} -> ${pageNumber}`);
+							score /= 2;
+							break;
+						}
+					}
+				}
+				previous = pageNumber;
+			}
+
+			let seen = new Set<string>();
+			for (let [, pageNumber] of mapping) {
+				if (seen.has(pageNumber)) {
+					// Non-numeric duplicates: We're matching something that isn't page numbers, so abort
+					if (/^\D{2,}$/.test(pageNumber)) {
+						console.log('Aborting due to non-numeric duplicate page number', pageNumber);
+						return { mapping: [], score: 0, matcher };
+					}
+					// Numeric duplicates: Dock half the points, but potentially still use the mapping
+					console.log('Duplicate page number', pageNumber);
+					score /= 2;
+					break;
+				}
+				seen.add(pageNumber);
+			}
+
+			console.log(`Score: ${score} (${mapping.length} matches)`);
+			return { mapping, score, matcher };
+		});
+		potentialMappings = potentialMappings
+			.filter(({ score }) => score > 0)
+			.sort((a, b) => b.mapping.length - a.mapping.length);
+		let mapping = potentialMappings[0];
+		if (mapping) {
+			this._tree.setPairs(mapping.mapping);
+			this._isPhysical = true;
 			console.log(`Added ${this._tree.length} physical page mappings in ${
-				((new Date().getTime() - startTime) / 1000).toFixed(2)}s`);
+				((new Date().getTime() - startTime) / 1000).toFixed(2)}s using ${mapping.matcher.selector}`);
 		}
 		else {
 			console.log('Not enough page numbers to be confident -- reverting to EPUB locations');
-			this._tree.clear();
-		}
-		if (this._tree.length) {
-			this._isPhysical = true;
 		}
 	}
 
@@ -149,14 +205,14 @@ class PageMapping {
 			((new Date().getTime() - startTime) / 1000).toFixed(2)}s`);
 	}
 
-	private _freeze() {
+	private _freeze(view: EPUBView) {
 		this._tree.freeze();
 
 		let version = PageMapping.VERSION;
 		let isPhysical = this._isPhysical;
 		let mappings = this._tree.toArray()
 			.map(([range, label]) => {
-				let cfi = this._view.getCFI(range.toRange());
+				let cfi = view.getCFI(range.toRange());
 				if (!cfi) {
 					return null;
 				}
@@ -200,6 +256,14 @@ class PageMapping {
 		return this._tree.keys();
 	}
 
+	pageLabels(): IterableIterator<string> {
+		return this._tree.values();
+	}
+
+	entries(): IterableIterator<[PersistentRange, string]> {
+		return this._tree.entries();
+	}
+
 	toJSON() {
 		if (!this._json) {
 			throw new Error('Not yet frozen');
@@ -216,6 +280,11 @@ type Matcher = {
 const MATCHERS: Matcher[] = [
 	{
 		selector: '[id*="page" i]:not(#pagetop):not(#pagebottom):empty',
+		extract: el => el.id.replace(/page[-_]?/i, '').replace(/^(.*_)+/, '')
+	},
+
+	{
+		selector: '[id*="page" i]:not(#pagetop):not(#pagebottom)',
 		extract: el => el.id.replace(/page[-_]?/i, '').replace(/^(.*_)+/, '')
 	},
 

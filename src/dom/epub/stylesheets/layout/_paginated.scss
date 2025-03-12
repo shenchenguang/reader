@@ -92,9 +92,13 @@ replaced-body {
 		position: relative !important;
 	}
 
-	section + section {
+	section + section, .break-before {
 		// It's like break-after, but Firefox supports it
 		margin-block-start: 100vh;
+	}
+
+	.break-after {
+		margin-block-end: 100vh;
 	}
 
 	img, svg, audio, video {
@@ -118,7 +122,7 @@ replaced-body {
 		border: none !important;
 	}
 
-	.table-like:not(table, mtable) {
+	.table-like:not(table, mtable), ol, ul {
 		display: flex;
 		flex-direction: column;
 	}

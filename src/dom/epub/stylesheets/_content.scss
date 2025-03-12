@@ -63,7 +63,8 @@
 	&[data-color-scheme="dark"] {
 		:not(:link):not(:visited) {
 			color: inherit !important;
-			background: transparent !important;
+			// Keep background-image, because some EPUBs use it for image links
+			background-color: transparent !important;
 		}
 	}
 }
@@ -105,9 +106,6 @@ replaced-body {
 	:root:not(.use-original-font) & {
 		font-family: var(--content-font-family, "Georgia", serif);
 	}
-	line-height: var(--content-line-height) !important;
-	word-spacing: var(--content-word-spacing) !important;
-	letter-spacing: var(--content-letter-spacing) !important;
 	text-align: justify;
 	text-rendering: optimizeLegibility;
 
@@ -135,6 +133,12 @@ replaced-body {
 	&:lang(si),
 	&:lang(zh) {
 		--content-line-height-compensation: 1.167;
+	}
+
+	&, * {
+		line-height: var(--content-line-height) !important;
+		word-spacing: var(--content-word-spacing) !important;
+		letter-spacing: var(--content-letter-spacing) !important;
 	}
 
 	p, [role="paragraph"] {
@@ -195,8 +199,13 @@ replaced-body {
 }
 
 body.footnote-popup-content {
+	replaced-body {
+		text-align: start;
+	}
+
 	* {
 		list-style-type: none !important;
+		border: 0 !important;
 	}
 
 	.section-container {
@@ -206,4 +215,8 @@ body.footnote-popup-content {
 
 #annotation-overlay {
 	display: contents;
+}
+
+.a11y-cursor-target {
+	outline: none;
 }

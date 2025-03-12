@@ -17,6 +17,7 @@ import Epub, {
 	NavItem,
 } from "epubjs";
 import {
+	getStartElement,
 	moveRangeEndsIntoTextNodes,
 	PersistentRange,
 	splitRangeToTextNodes
@@ -50,12 +51,14 @@ import {
 	PaginatedFlow,
 	ScrolledFlow
 } from "./flow";
-import { DEFAULT_EPUB_APPEARANCE, RTL_SCRIPTS } from "./defines";
+import { DEFAULT_EPUB_APPEARANCE, RTL_SCRIPTS, A11Y_VIRT_CURSOR_DEBOUNCE_LENGTH } from "./defines";
 import { parseAnnotationsFromKOReaderMetadata, koReaderAnnotationToRange } from "./lib/koreader";
 import { ANNOTATION_COLORS } from "../../common/defines";
 import { calibreAnnotationToRange, parseAnnotationsFromCalibreMetadata } from "./lib/calibre";
 import LRUCacheMap from "../common/lib/lru-cache-map";
 import { mode } from "../common/lib/collection";
+import { debounce } from '../../common/lib/debounce';
+import { placeA11yVirtualCursor } from '../../common/lib/utilities';
 
 class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 	protected _find: EPUBFindProcessor | null = null;
@@ -185,6 +188,7 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 		this._sectionsContainer.hidden = false;
 		this.pageMapping = this._initPageMapping(viewState.savedPageMapping);
 		this._initOutline();
+		this._addAriaNavigationLandmarks();
 
 		// Validate viewState and its properties
 		// Also make sure this doesn't trigger _updateViewState
@@ -251,11 +255,11 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 
 	private async _displaySections() {
 		let cssRewriter = new CSSRewriter(this._iframeDocument);
-		await Promise.all(this.book.spine.spineItems
-			// We should do this:
-			// .filter(section => section.linear)
-			// But we need to be sure it won't break anything
-			.map(section => this._displaySection(section, cssRewriter)));
+		for (let section of this.book.spine.spineItems) {
+			// We should filter to linear sections only,
+			// but we need to be sure it won't break anything
+			await this._displaySection(section, cssRewriter);
+		}
 
 		this._iframeDocument.documentElement.style.writingMode = this.book.packaging.metadata.primary_writing_mode
 			|| mode(this._sectionRenderers.map(r => r.container.dataset.writingMode).filter(Boolean))
@@ -387,6 +391,26 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 		catch (e) {
 			console.error('Unable to get range for CFI', cfiString, e);
 			return null;
+		}
+	}
+
+	// Add landmarks with page labels for screen reader navigation
+	private async _addAriaNavigationLandmarks() {
+		let locator = this._options.getLocalizedString(
+			this.pageMapping.isPhysical ? 'pdfReader.page' : 'pdfReader.location'
+		);
+
+		for (let [range, pageLabel] of this.pageMapping.entries()) {
+			let node = range.startContainer;
+			let containingElement = closestElement(node);
+			if (!containingElement) continue;
+
+			// This is semantically not correct, as we are assigning
+			// navigation role to <p> and <h> nodes but this is the
+			// best solution to avoid adding nodes into the DOM, which
+			// will break CFIs.
+			containingElement.setAttribute('role', 'navigation');
+			containingElement.setAttribute('aria-label', `${locator}: ${pageLabel}`);
 		}
 	}
 
@@ -796,6 +820,11 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 			return;
 		}
 
+		// These keypresses scroll the content and should change focus for screen readers
+		if (!event.shiftKey && ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(key)) {
+			this._a11yShouldFocusVirtualCursorTarget = true;
+		}
+
 		if (!event.shiftKey) {
 			if (key == 'ArrowLeft') {
 				this.flow.navigateLeft();
@@ -860,6 +889,7 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 			outlinePath: Date.now() - this._lastNavigationTime > 1500 ? this._getOutlinePath() : undefined,
 		};
 		this._options.onChangeViewStats(viewStats);
+		this.a11yRecordCurrentPage();
 	}
 
 	protected override _handleViewUpdate() {
@@ -869,40 +899,9 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 
 	protected _openFootnoteOverlayPopup(link: HTMLAnchorElement, element: Element) {
 		let doc = document.implementation.createHTMLDocument();
-		let cspMeta = this._iframeDocument.createElement('meta');
-		cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
-		cspMeta.setAttribute('content', this._getCSP());
-		doc.head.prepend(cspMeta);
 
-		let container = document.createElement('div');
+		doc.documentElement.dataset.colorScheme = this._iframeDocument.documentElement.dataset.colorScheme;
 
-		let current = element;
-		let currentClone = current.cloneNode(true) as HTMLElement;
-		while (!current.classList.contains('section-container')) {
-			let parent = current.parentElement;
-			if (!parent) {
-				break;
-			}
-			let parentClone = parent.cloneNode(false) as HTMLElement;
-			parentClone.appendChild(currentClone);
-			currentClone = parentClone;
-			current = parent;
-		}
-		container.appendChild(currentClone);
-
-		for (let link of container.querySelectorAll('a')) {
-			if (!this._isExternalLink(link)) {
-				link.removeAttribute('href');
-			}
-		}
-
-		doc.body.append(container);
-		let content = new XMLSerializer().serializeToString(doc);
-
-		let range = link.ownerDocument.createRange();
-		range.selectNode(link);
-		let domRect = range.getBoundingClientRect();
-		let rect: ArrayRect = [domRect.left, domRect.top, domRect.right, domRect.bottom];
 		let css = '';
 		for (let sheet of [...this._iframeDocument.styleSheets, ...this._iframeDocument.adoptedStyleSheets]) {
 			for (let rule of sheet.cssRules) {
@@ -913,8 +912,65 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 			:root {
 				--content-scale: ${this.scale};
 				--content-font-family: ${this._iframeDocument.documentElement.style.getPropertyValue('--content-font-family')};
+				--selection-color: ${this._iframeDocument.documentElement.style.getPropertyValue('--selection-color')};
+				--background-color: ${this._iframeDocument.documentElement.style.getPropertyValue('--background-color')};
+				--text-color: ${this._iframeDocument.documentElement.style.getPropertyValue('--text-color')};
 			}
 		`;
+
+		let cspMeta = doc.createElement('meta');
+		cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
+		cspMeta.setAttribute('content', this._getCSP());
+		doc.head.prepend(cspMeta);
+
+		let container = doc.createElement('div');
+
+		let handledIbid = false;
+		let ibidRe = /\bIbid\b/;
+
+		let current = element;
+		let currentClone = current.cloneNode(true) as HTMLElement;
+		while (!current.classList.contains('section-container')) {
+			let parent = current.parentElement;
+			if (!parent) {
+				break;
+			}
+			let parentClone = parent.cloneNode(false) as HTMLElement;
+			parentClone.appendChild(currentClone);
+
+			// If the current footnote contains "Ibid", keep prepending previous siblings
+			// until we find one that doesn't
+			if (!handledIbid
+					&& current.previousElementSibling
+					&& current.textContent
+					&& ibidRe.test(current.textContent)) {
+				do {
+					current = current.previousElementSibling;
+					let currentClone = current.cloneNode(true) as HTMLElement;
+					parentClone.prepend(currentClone);
+				}
+				while (current.previousElementSibling?.textContent
+					&& ibidRe.test(current.previousElementSibling.textContent));
+				handledIbid = true;
+			}
+
+			currentClone = parentClone;
+			current = parent;
+		}
+		container.append(currentClone);
+
+		for (let link of container.querySelectorAll('a')) {
+			if (!this._isExternalLink(link)) {
+				link.removeAttribute('href');
+			}
+		}
+
+		doc.body.append(container);
+		let content = new XMLSerializer().serializeToString(doc);
+
+		let domRect = link.getBoundingClientRect();
+		let rect: ArrayRect = [domRect.left, domRect.top, domRect.right, domRect.bottom];
+
 		let overlayPopup = {
 			type: 'footnote',
 			content,
@@ -1054,9 +1110,15 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 								annotation: (
 									result.range
 									&& this._getAnnotationFromRange(result.range.toRange(), 'highlight')
-								) ?? undefined
+								) ?? undefined,
+								currentPageLabel: result.range ? this.pageMapping.getPageLabel(result.range.toRange()) : null,
+								currentSnippet: result.snippets[result.index]
 							}
 						});
+						if (result.range) {
+							// Record the result that sceen readers should focus on after search popup is closed
+							this._a11yVirtualCursorTarget = getStartElement(result.range);
+						}
 					},
 				});
 				let startRange = (this.flow.startRange && new PersistentRange(this.flow.startRange)) ?? undefined;
@@ -1178,6 +1240,21 @@ class EPUBView extends DOMView<EPUBViewState, EPUBViewData> {
 			this._renderAnnotations();
 		}
 	}
+
+	// Place virtual cursor to the top of the current page.
+	// Debounce to not run this on every view stats update.
+	protected a11yRecordCurrentPage = debounce(() => {
+		if (!this.flow.startRange) return;
+		// Do not interfere with marking search results as virtual cursor targets
+		if (this._findState?.active) return;
+		let node = this.flow.startRange.startContainer;
+		let containingElement = closestElement(node);
+		this._a11yVirtualCursorTarget = containingElement;
+		if (this._a11yShouldFocusVirtualCursorTarget) {
+			this._a11yShouldFocusVirtualCursorTarget = false;
+			placeA11yVirtualCursor(this._a11yVirtualCursorTarget);
+		}
+	}, A11Y_VIRT_CURSOR_DEBOUNCE_LENGTH);
 
 	protected _setScale(scale: number) {
 		this._keepPosition(() => {
