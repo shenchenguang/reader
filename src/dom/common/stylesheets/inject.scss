@@ -22,3 +22,11 @@ body[data-tool="note"] {
 		cursor: default !important;
 	}
 }
+
+#annotation-overlay {
+	user-select: none;
+}
+
+:focus-visible {
+	outline: 1px auto;
+}

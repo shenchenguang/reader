@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
 import cx from 'classnames';
 
 // TODO: Resizing window doesn't properly reposition annotation popup on x axis, in EPUB view
@@ -110,6 +109,19 @@ function ViewPopup({ id, rect, className, uniqueRef, padding, children, onRender
 			else if (left + width > viewRect[2] - padding) {
 				left = viewRect[2] - width - padding;
 			}
+		}
+
+		if (left + width > viewRect[2] - padding) {
+			left = viewRect[2] - width - padding;
+		}
+		if (left < padding) {
+			left = padding;
+		}
+		if (top + height > viewRect[3] - padding) {
+			top = viewRect[3] - height - padding;
+		}
+		if (top < padding) {
+			top = padding;
 		}
 
 		xrect.current = rect;

@@ -4,7 +4,8 @@ import {
 	Annotation,
 	AnnotationPopupParams,
 	AnnotationType,
-	ArrayRect, ColorScheme,
+	ArrayRect,
+	ColorScheme,
 	FindState,
 	MaybePromise,
 	NavLocation,
@@ -12,9 +13,11 @@ import {
 	OutlineItem,
 	OverlayPopupParams,
 	Platform,
-	SelectionPopupParams, Theme,
+	SelectionPopupParams,
+	Theme,
 	Tool,
 	ToolType,
+	ViewContextMenuOverlay,
 	ViewStats,
 	WADMAnnotation,
 } from "../../common/types";
@@ -30,6 +33,7 @@ import { Selector } from "./lib/selector";
 import {
 	caretPositionFromPoint,
 	getBoundingPageRect,
+	getColumnSeparatedPageRects,
 	makeRangeSpanning,
 	moveRangeEndsIntoTextNodes,
 	PersistentRange,
@@ -54,9 +58,12 @@ import { debounce } from "../../common/lib/debounce";
 import {
 	getBoundingRect,
 	isPageRectVisible,
+	pageRectToClientRect,
 	rectContains
 } from "./lib/rect";
 import { History } from "../../common/lib/history";
+import { closestMathTeX } from "./lib/math";
+import { DEFAULT_REFLOWABLE_APPEARANCE } from "./defines";
 
 abstract class DOMView<State extends DOMViewState, Data> {
 	readonly MIN_SCALE = 0.6;
@@ -64,6 +71,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 	readonly MAX_SCALE = 1.8;
 
 	initializedPromise: Promise<void>;
+
+	initialized = false;
 
 	protected readonly _container: Element;
 
@@ -155,6 +164,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 
 	protected _a11yShouldFocusVirtualCursorTarget: boolean;
 
+	appearance?: ReflowableAppearance;
+
 	scale = 1;
 
 	protected constructor(options: DOMViewOptions<State, Data>) {
@@ -197,6 +208,7 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		// support the csp attribute (currently all browsers besides Chrome derivatives)
 		this._iframe.setAttribute('csp', this._getCSP());
 		this.initializedPromise = this._initialize();
+		this.initializedPromise.then(() => this.initialized = true);
 		options.container.append(this._iframe);
 	}
 
@@ -229,8 +241,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		let imgSrc = (origin || '') + ' data: blob:';
 		// Allow styles from data: URIs, inline, and from that origin
 		let styleSrc = (origin || '') + " data: 'unsafe-inline'";
-		// Allow fonts from data: and blob: URIs and from that origin
-		let fontSrc = (origin || '') + ' data: blob:';
+		// Allow fonts from resource: (for TeX fonts), data:, and blob: URIs and from that origin
+		let fontSrc = (origin || '') + ' resource: data: blob:';
 		// Don't allow any scripts
 		let scriptSrc = "'unsafe-eval'";
 		// Don't allow any child frames
@@ -306,7 +318,16 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		});
 	}
 
-	protected abstract _handleViewCreated(viewState: Partial<Readonly<State>>): MaybePromise<void>;
+	protected async _handleViewCreated(viewState: Partial<Readonly<State>>): Promise<void> {
+		this.setHyphenate(this._options.hyphenate ?? true);
+
+		if (viewState.appearance) {
+			this.setAppearance(viewState.appearance);
+		}
+		else {
+			this.setAppearance(DEFAULT_REFLOWABLE_APPEARANCE);
+		}
+	}
 
 	// ***
 	// Utilities for annotations - abstractions over the specific types of selectors used by the two views
@@ -360,14 +381,13 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		return href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:') || href.startsWith('tel:');
 	}
 
-	protected _getViewportBoundingRect(range: Range): DOMRect {
-		let rect = range.getBoundingClientRect();
-		return new DOMRect(
+	protected _clientRectToViewportRect(rect: DOMRect): DOMRect {
+		return this._scaleDOMRect(new DOMRect(
 			rect.x + this._iframe.getBoundingClientRect().x - this._container.getBoundingClientRect().x,
 			rect.y + this._iframe.getBoundingClientRect().y - this._container.getBoundingClientRect().y,
 			rect.width,
 			rect.height
-		);
+		));
 	}
 
 	protected _getBoundingPageRectCached(range: Range): DOMRectReadOnly {
@@ -454,7 +474,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 			let focusedElement = this._iframeDocument.activeElement as HTMLElement | SVGElement | null;
 			if (focusedElement === this._annotationShadowRoot.host) {
 				focusedElement = this._annotationShadowRoot.activeElement as HTMLElement | SVGElement | null;
-				if (!focusedElement?.matches('[tabindex="-1"]')) {
+				if (!focusedElement?.matches('[tabindex="-1"]')
+						|| !this._annotationRenderRootEl.classList.contains('keyboard-focus')) {
 					focusedElement = null;
 				}
 			}
@@ -540,6 +561,9 @@ abstract class DOMView<State extends DOMViewState, Data> {
 	}
 
 	protected _handleViewUpdate() {
+		if (!this.initialized) {
+			return;
+		}
 		this._updateViewState();
 		this._updateViewStats();
 		this._displayedAnnotationCache = new WeakMap();
@@ -669,10 +693,25 @@ abstract class DOMView<State extends DOMViewState, Data> {
 			return;
 		}
 		let range = moveRangeEndsIntoTextNodes(makeRangeSpanning(...getSelectionRanges(selection)));
-		let domRect = this._scaleDOMRect(this._getViewportBoundingRect(range));
-		let rect: ArrayRect = [domRect.left, domRect.top, domRect.right, domRect.bottom];
+		// Split the selection into its column-separated parts and get the
+		// bounding rect encompassing the visible ones. This gives us a more
+		// accurate anchor for the popup.
+		let columnSeparatedPageRects = getColumnSeparatedPageRects(range);
+		// If no column rects were visible, just use the bounding rect. This
+		// essentially serves as a placeholder until the selection comes back
+		// into view.
+		if (!columnSeparatedPageRects.length) {
+			columnSeparatedPageRects = [getBoundingPageRect(range)];
+		}
+		let domRect = this._clientRectToViewportRect(
+			pageRectToClientRect(
+				getBoundingRect(columnSeparatedPageRects),
+				this._iframeWindow
+			)
+		);
 		let annotation = this._getAnnotationFromRange(range, 'highlight');
 		if (annotation) {
+			let rect: ArrayRect = [domRect.left, domRect.top, domRect.right, domRect.bottom];
 			this._options.onSetSelectionPopup({ rect, annotation });
 		}
 		else {
@@ -697,8 +736,10 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		// Note: Popup won't be visible if sidebar is opened
 		let domRect;
 		if (annotation.type == 'note') {
-			domRect = this._annotationRenderRootEl.querySelector(`[data-annotation-id="${annotation.id}"]`)
-				?.getBoundingClientRect();
+			let noteElem = this._annotationRenderRootEl.querySelector(`[data-annotation-id="${annotation.id}"]`);
+			if (noteElem) {
+				domRect = this._scaleDOMRect(noteElem.getBoundingClientRect());
+			}
 		}
 		if (!domRect) {
 			let range = this.toDisplayedRange(annotation.position);
@@ -706,9 +747,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 				this._options.onSetAnnotationPopup();
 				return;
 			}
-			domRect = this._getViewportBoundingRect(range);
+			domRect = this._clientRectToViewportRect(range.getBoundingClientRect());
 		}
-		domRect = this._scaleDOMRect(domRect);
 		let rect: ArrayRect = [domRect.left, domRect.top, domRect.right, domRect.bottom];
 		this._options.onSetAnnotationPopup({ rect, annotation });
 	}
@@ -758,6 +798,7 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		let roots = [this._iframeDocument.documentElement, this._annotationRenderRootEl];
 		for (let root of roots) {
 			root.dataset.colorScheme = themeColorScheme;
+			root.style.colorScheme = themeColorScheme;
 			root.style.setProperty('--background-color', theme.background);
 			root.style.setProperty('--text-color', theme.foreground);
 		}
@@ -879,6 +920,9 @@ abstract class DOMView<State extends DOMViewState, Data> {
 			return;
 		}
 		event.preventDefault();
+		if (event.altKey) {
+			return;
+		}
 		if (this._isExternalLink(link)) {
 			this._options.onOpenLink(link.href);
 		}
@@ -890,6 +934,23 @@ abstract class DOMView<State extends DOMViewState, Data> {
 	protected abstract _handleInternalLinkClick(link: HTMLAnchorElement): void;
 
 	protected _handleKeyDown(event: KeyboardEvent) {
+		let activeElementBefore = !!this._iframeDocument.activeElement
+			&& this._iframeDocument.activeElement !== this._iframeDocument.body;
+		this._handleKeyDownInternal(event);
+		let activeElementAfter = !!this._iframeDocument.activeElement
+			&& this._iframeDocument.activeElement !== this._iframeDocument.body;
+
+		// If focus was gained via keyboard (e.g. Tab), show focus rings
+		if (!activeElementBefore && activeElementAfter) {
+			this._annotationRenderRootEl.classList.add('keyboard-focus');
+		}
+		// If focus was lost via keyboard (e.g. Escape), hide focus rings
+		else if (activeElementBefore && !activeElementAfter) {
+			this._annotationRenderRootEl.classList.remove('keyboard-focus');
+		}
+	}
+
+	private _handleKeyDownInternal(event: KeyboardEvent) {
 		// To figure out if wheel events are pinch-to-zoom
 		this._isCtrlKeyDown = event.key === 'Control';
 
@@ -1162,19 +1223,32 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		// Prevent native context menu
 		event.preventDefault();
 		let br = this._iframe.getBoundingClientRect();
-		let overlay;
-		let a = (event.target as Element).closest('a');
-		if (a && this._isExternalLink(a)) {
-			overlay = {
-				type: 'external-link' as const,
-				url: a.href,
-			};
-		}
+		let overlay = this._getContextMenuOverlay(event.target as Element);
 		this._options.onOpenViewContextMenu({
 			x: br.x + event.clientX * this._iframeCoordScaleFactor,
 			y: br.y + event.clientY * this._iframeCoordScaleFactor,
 			overlay,
 		});
+	}
+
+	private _getContextMenuOverlay(el: Element): ViewContextMenuOverlay | undefined {
+		let a = el.closest('a');
+		if (a && this._isExternalLink(a)) {
+			return {
+				type: 'external-link',
+				url: a.href,
+			};
+		}
+
+		let math = closestMathTeX(el);
+		if (math) {
+			return {
+				type: 'math',
+				tex: math,
+			};
+		}
+
+		return undefined;
 	}
 
 	private _handleAnnotationContextMenu = (id: string, event: React.MouseEvent) => {
@@ -1207,6 +1281,17 @@ abstract class DOMView<State extends DOMViewState, Data> {
 
 	private _handleSelectionChange() {
 		let selection = this._iframeDocument.getSelection();
+
+		// Safari fails to follow user-select: none, so manually collapse
+		// the selection if it's on the annotation overlay
+		if (selection && isSafari
+				&& selection.rangeCount > 0
+				&& selection.getRangeAt(0).startContainer.childNodes[selection.getRangeAt(0).startOffset]
+					=== this._annotationShadowRoot.host) {
+			selection.collapseToStart();
+			return;
+		}
+
 		if (!selection || selection.isCollapsed) {
 			this._options.onSetSelectionPopup(null);
 		}
@@ -1401,6 +1486,9 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		// If we marked a node as future focus target for screen readers, clear it to not interfere with focus
 		this._a11yVirtualCursorTarget = null;
 
+		// Hide focus rings
+		this._annotationRenderRootEl.classList.remove('keyboard-focus');
+
 		// Create note annotation on pointer down event, if note tool is active.
 		// The note tool will be automatically deactivated in reader.js,
 		// because this is what we do in PDF reader
@@ -1484,8 +1572,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 	}
 
 	protected _handleTouchMove(event: TouchEvent) {
-		// We need to stop annotation-creating touches from scrolling the view.
-		// Unfortunately:
+		// We need to stop annotation-creating/resizing touches from scrolling
+		// the view. Unfortunately:
 		// 1. The recommended way to prevent touch scrolling is via the
 		//    touch-action CSS property, but a WebKit bug causes changes to
 		//    that property not to take effect in child nodes until they're
@@ -1495,8 +1583,8 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		//    pointermove events non-cancellable, even when the listener is
 		//    initialized with { passive: false }.
 		// So we do it with a separate touchmove listener.
-		if (this._touchAnnotationStartPosition
-				&& (this._tool.type === 'highlight' || this._tool.type === 'underline')) {
+		if (this._touchAnnotationStartPosition && (this._tool.type === 'highlight' || this._tool.type === 'underline')
+				|| this._resizingAnnotationID) {
 			event.preventDefault();
 		}
 		// Handle pinch-to-zoom
@@ -1706,6 +1794,43 @@ abstract class DOMView<State extends DOMViewState, Data> {
 		this._outline = outline;
 	}
 
+	setAppearance(partialAppearance: Partial<ReflowableAppearance>) {
+		let appearance = {
+			...DEFAULT_REFLOWABLE_APPEARANCE,
+			...partialAppearance
+		};
+		this.appearance = appearance;
+		this._iframeDocument.documentElement.style.setProperty('--content-line-height-adjust', String(appearance.lineHeight));
+		this._iframeDocument.documentElement.style.setProperty('--content-word-spacing-adjust', String(appearance.wordSpacing));
+		this._iframeDocument.documentElement.style.setProperty('--content-letter-spacing-adjust', String(appearance.letterSpacing));
+		this._iframeDocument.documentElement.classList.toggle('use-original-font', appearance.useOriginalFont);
+
+		let pageWidth;
+		switch (appearance.pageWidth) {
+			case PageWidth.Narrow:
+				pageWidth = 'narrow';
+				break;
+			case PageWidth.Normal:
+				pageWidth = 'normal';
+				break;
+			case PageWidth.Full:
+				pageWidth = 'full';
+				break;
+		}
+		this._iframeDocument.documentElement.dataset.pageWidth = pageWidth;
+		this._handleViewUpdate();
+	}
+
+	setFontFamily(fontFamily: string) {
+		this._iframeDocument.documentElement.style.setProperty('--content-font-family', fontFamily);
+		this._renderAnnotations(true);
+	}
+
+	setHyphenate(hyphenate: boolean) {
+		this._iframeDocument.documentElement.classList.toggle('hyphenate', hyphenate);
+		this._renderAnnotations(true);
+	}
+
 	// ***
 	// Public methods to control the view from the outside
 	// ***
@@ -1786,10 +1911,13 @@ abstract class DOMView<State extends DOMViewState, Data> {
 export type DOMViewOptions<State extends DOMViewState, Data> = {
 	primary?: boolean;
 	mobile?: boolean;
+	preview?: boolean;
+	readOnly?: boolean;
 	container: Element;
 	tools: Record<ToolType, Tool>;
 	tool: Tool;
 	platform: Platform;
+	location?: NavLocation;
 	selectedAnnotationIDs: string[];
 	annotations: WADMAnnotation[];
 	showAnnotations: boolean;
@@ -1808,7 +1936,7 @@ export type DOMViewOptions<State extends DOMViewState, Data> = {
 	onChangeViewStats: (stats: ViewStats) => void;
 	onSetDataTransferAnnotations: (dataTransfer: DataTransfer, annotation: NewAnnotation<WADMAnnotation> | NewAnnotation<WADMAnnotation>[], fromText?: boolean) => void;
 	onAddAnnotation: (annotation: NewAnnotation<WADMAnnotation>, select?: boolean) => WADMAnnotation;
-	onUpdateAnnotations: (annotations: Annotation[]) => void;
+	onUpdateAnnotations: (annotations: Partial<Annotation>[]) => void;
 	onOpenLink: (url: string) => void;
 	onSelectAnnotations: (ids: string[], triggeringEvent?: KeyboardEvent | MouseEvent) => void;
 	onSetSelectionPopup: (params?: SelectionPopupParams<WADMAnnotation> | null) => void;
@@ -1816,7 +1944,7 @@ export type DOMViewOptions<State extends DOMViewState, Data> = {
 	onSetOverlayPopup: (params?: OverlayPopupParams) => void;
 	onSetFindState: (state?: FindState) => void;
 	onSetZoom?: (iframe: HTMLIFrameElement, zoom: number) => void;
-	onOpenViewContextMenu: (params: { x: number, y: number, overlay?: { type: 'external-link', url: string } }) => void;
+	onOpenViewContextMenu: (params: { x: number, y: number, overlay?: ViewContextMenuOverlay }) => void;
 	onOpenAnnotationContextMenu: (params: { ids: string[], x: number, y: number, view: boolean }) => void;
 	onFocus: () => void;
 	onTabOut: (isShiftTab?: boolean) => void;
@@ -1824,7 +1952,8 @@ export type DOMViewOptions<State extends DOMViewState, Data> = {
 	onKeyDown: (event: KeyboardEvent) => void;
 	onEPUBEncrypted: () => void;
 	onFocusAnnotation: (annotation: WADMAnnotation) => void;
-	getLocalizedString: (name: string) => string;
+	onSetHiddenAnnotations: (ids: string[]) => void;
+	getLocalizedString?: (name: string) => string;
 	data: Data & {
 		buf?: Uint8Array,
 		url?: string
@@ -1833,6 +1962,7 @@ export type DOMViewOptions<State extends DOMViewState, Data> = {
 
 export interface DOMViewState {
 	scale?: number;
+	appearance?: Partial<ReflowableAppearance>;
 }
 
 export interface CustomScrollIntoViewOptions extends Omit<ScrollIntoViewOptions, 'inline'> {
@@ -1843,6 +1973,20 @@ export interface CustomScrollIntoViewOptions extends Omit<ScrollIntoViewOptions,
 
 export interface NavigateOptions extends CustomScrollIntoViewOptions {
 	skipHistory?: boolean;
+}
+
+export interface ReflowableAppearance {
+	lineHeight: number;
+	wordSpacing: number;
+	letterSpacing: number;
+	pageWidth: PageWidth;
+	useOriginalFont: boolean;
+}
+
+export const enum PageWidth {
+	Narrow = -1,
+	Normal = 0,
+	Full = 1
 }
 
 export default DOMView;

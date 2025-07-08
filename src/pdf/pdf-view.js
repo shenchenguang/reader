@@ -127,6 +127,8 @@ class PDFView {
 
 		this._findState = options.findState;
 
+		this._scrolling = false;
+
 
 		// Create a MediaQueryList object
 		let darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -205,7 +207,10 @@ class PDFView {
 				setOptions();
 				this._iframeWindow.onAttachPage = this._attachPage.bind(this);
 				this._iframeWindow.onDetachPage = this._detachPage.bind(this);
-				if (!this._preview) {
+				if (this._preview) {
+					setTimeout(this._resolveInitializedPromise);
+				}
+				else {
 					this._init();
 				}
 				if (options.data.buf) {
@@ -216,9 +221,15 @@ class PDFView {
 				}
 				window.PDFViewerApplication = this._iframeWindow.PDFViewerApplication;
 				window.if = this._iframeWindow;
-				this._resolveInitializedPromise();
 
 				this._iframeWindow.document.getElementById('viewerContainer').addEventListener('scroll', (event) => {
+					this._scrolling = true;
+					clearTimeout(this._scrollTimeout);
+					this._scrollTimeout = setTimeout(() => {
+						this._scrolling = false;
+					}, 100);
+
+
 					let x = event.target.scrollLeft;
 					let y = event.target.scrollTop;
 
@@ -390,6 +401,8 @@ class PDFView {
 			this.navigate(this._location);
 		}
 
+		this._resolveInitializedPromise();
+
 		await this._initProcessedData();
 		this._findController.setDocument(this._iframeWindow.PDFViewerApplication.pdfDocument);
 	}
@@ -543,6 +556,12 @@ class PDFView {
 
 		this._detachPage(originalPage, true);
 
+		// When actively changing zoom sometimes the PageView that was just attached no longer has canvas
+		// which probably means that it is being destroyed
+		if (!originalPage.canvas) {
+			return;
+		}
+
 		originalPage.textLayerPromise.then(() => {
 			// Text layer may no longer exist if it was detached in the meantime
 			let textLayer = originalPage.div.querySelector('.textLayer');
@@ -618,7 +637,7 @@ class PDFView {
 			let overlays = [];
 			let pdfPage = this._pdfPages[pageIndex];
 			if (pdfPage) {
-				overlays = pdfPage.overlays;
+				overlays = pdfPage.overlays.filter(x => x.type !== 'reference');
 			}
 
 			let objects = [];
@@ -1509,6 +1528,9 @@ class PDFView {
 		}
 		let selectableOverlays = [];
 		for (let overlay of pdfPage.overlays) {
+			if (overlay.type === 'reference') {
+				continue;
+			}
 			if (intersectAnnotationWithPoint(overlay.position, position)) {
 				selectableOverlays.push(overlay);
 			}
@@ -1818,48 +1840,8 @@ class PDFView {
 		let shift = event.shiftKey;
 		let position = this.pointerEventToPosition(event);
 
-		if (this._options.platform !== 'web' && event.button === 2) {
-			// Clear pointer down because pointer up event won't be received in this iframe
-			// when opening a native context menu
-			this._pointerDownTriggered = false;
-			let br = this._iframe.getBoundingClientRect();
-			let selectableAnnotation;
-			if (position) {
-				selectableAnnotation = (this.getSelectableAnnotations(position) || [])[0];
-			}
-			let selectedAnnotations = this.getSelectedAnnotations();
-			if (!selectableAnnotation) {
-				if (this._selectedAnnotationIDs.length !== 0) {
-					this._onSelectAnnotations([], event);
-				}
-				let overlay;
-				if (position) {
-					overlay = this._getSelectableOverlay(position);
-				}
-				// If this is a keyboard contextmenu event, its position won't take our
-				// text selection into account since we don't use browser selection APIs.
-				// Position the menu manually.
-				if (event.mozInputSource === 6 && this._selectionRanges.length) {
-					const EXTRA_VERTICAL_PADDING = 10;
-					let selectionBoundingRect = this.getClientRectForPopup(this._selectionRanges[0].position);
-					this._onOpenViewContextMenu({
-						x: br.x + selectionBoundingRect[0],
-						y: br.y + selectionBoundingRect[3] + EXTRA_VERTICAL_PADDING,
-						overlay
-					});
-				}
-				else {
-					this._onOpenViewContextMenu({ x: br.x + event.clientX, y: br.y + event.clientY, overlay });
-				}
-			}
-			else if (!selectedAnnotations.includes(selectableAnnotation) && !this._textAnnotationFocused()) {
-				this._onSelectAnnotations([selectableAnnotation.id], event);
-				this._onOpenAnnotationContextMenu({ ids: [selectableAnnotation.id], x: br.x + event.clientX, y: br.y + event.clientY, view: true });
-			}
-			else if (!this._textAnnotationFocused()) {
-				this._onOpenAnnotationContextMenu({ ids: selectedAnnotations.map(x => x.id), x: br.x + event.clientX, y: br.y + event.clientY, view: true });
-			}
-			this._render();
+		if (event.button === 2) {
+			// Right click will be handled in the contextmenu event
 			return;
 		}
 
@@ -2045,6 +2027,10 @@ class PDFView {
 	}
 
 	_handlePointerMove = throttle((event) => {
+		if (this._scrolling) {
+			return;
+		}
+
 		let dragging = !!event.dataTransfer;
 		// Set action cursor on hover
 		if (!this.pointerDownPosition) {
@@ -2607,11 +2593,6 @@ class PDFView {
 		else {
 			this.updateCursor();
 		}
-		// Clear collapsed selection range on pointer up. Otherwise, holding shift
-		// key for another selection anchor will start unexpected offset
-		if (this._selectionRanges.length === 1 && this._selectionRanges[0].collapsed) {
-			this._selectionRanges = [];
-		}
 		this._render();
 		this._updateViewStats();
 	}
@@ -2684,11 +2665,61 @@ class PDFView {
 	}
 
 	_handleContextMenu(event) {
+		if (this._options.platform === 'web') {
+			return;
+		}
+
+		let position = this.pointerEventToPosition(event);
+		if (this._options.platform !== 'web' && event.button === 2) {
+			// Clear pointer down because the pointer up event won't be received in this iframe
+			// when opening a native context menu
+			this._pointerDownTriggered = false;
+			let br = this._iframe.getBoundingClientRect();
+			let selectableAnnotation;
+			if (position) {
+				selectableAnnotation = (this.getSelectableAnnotations(position) || [])[0];
+			}
+			let selectedAnnotations = this.getSelectedAnnotations();
+			if (!selectableAnnotation) {
+				if (this._selectedAnnotationIDs.length !== 0) {
+					this._onSelectAnnotations([], event);
+				}
+				let overlay;
+				if (position) {
+					overlay = this._getSelectableOverlay(position);
+				}
+				// If this is a keyboard contextmenu event, its position won't take our
+				// text selection into account since we don't use browser selection APIs.
+				// Position the menu manually.
+				if (event.mozInputSource === 6 && this._selectionRanges.length) {
+					const EXTRA_VERTICAL_PADDING = 10;
+					let selectionBoundingRect = this.getClientRectForPopup(this._selectionRanges[0].position);
+					this._onOpenViewContextMenu({
+						x: br.x + selectionBoundingRect[0],
+						y: br.y + selectionBoundingRect[3] + EXTRA_VERTICAL_PADDING,
+						overlay
+					});
+				}
+				else {
+					this._onOpenViewContextMenu({ x: br.x + event.clientX, y: br.y + event.clientY, overlay });
+				}
+			}
+			else if (!selectedAnnotations.includes(selectableAnnotation) && !this._textAnnotationFocused()) {
+				this._onSelectAnnotations([selectableAnnotation.id], event);
+				this._onOpenAnnotationContextMenu({ ids: [selectableAnnotation.id], x: br.x + event.clientX, y: br.y + event.clientY, view: true });
+			}
+			else if (!this._textAnnotationFocused()) {
+				this._onOpenAnnotationContextMenu({ ids: selectedAnnotations.map(x => x.id), x: br.x + event.clientX, y: br.y + event.clientY, view: true });
+			}
+			this._render();
+		}
+
+
 		// Open context menu due to touchscreen long press or context menu key press
 		if (event.mozInputSource === 5 || event.mozInputSource === 6) {
 			this._handlePointerDown(event);
 		}
-		if (this._options.platform !== 'web' && !this._textAnnotationFocused()) {
+		if (!this._textAnnotationFocused()) {
 			event.preventDefault();
 		}
 	}

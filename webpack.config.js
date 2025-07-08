@@ -4,6 +4,7 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const ZoteroLocalePlugin = require('./webpack.zotero-locale-plugin');
 
 function generateReaderConfig(build) {
 	let config = {
@@ -94,12 +95,21 @@ function generateReaderConfig(build) {
 					issuer: /\.[jt]sx?$/,
 					use: ['@svgr/webpack'],
 				},
-			],
+				{
+					test: /\.ftl$/,
+					type: 'asset/source'
+				}
+			].filter(Boolean)
 		},
 		resolve: {
-			extensions: ['.js', '.ts', '.tsx']
+			extensions: ['.js', '.ts', '.tsx'],
 		},
 		plugins: [
+			new ZoteroLocalePlugin({
+				files: ['zotero.ftl', 'reader.ftl'],
+				locales: ['en-US'],
+				commitHash: '37f8c4d4f425244b5ead77bb7e129d828f62fb43',
+			}),
 			new CleanWebpackPlugin({
 				cleanOnceBeforeBuildPatterns: ['**/*', '!pdf/**']
 			}),
@@ -113,6 +123,14 @@ function generateReaderConfig(build) {
 					build
 				},
 			}),
+			new CopyWebpackPlugin({
+				patterns: [
+					{
+						from: 'node_modules/mathjax-full/ts/output/chtml/fonts/tex-woff-v2/*.woff',
+						to: './mathjax-fonts/[name].woff'
+					}
+				],
+			}),
 		],
 	};
 
@@ -120,7 +138,6 @@ function generateReaderConfig(build) {
 		config.externals = {
 			react: 'React',
 			'react-dom': 'ReactDOM',
-			'react-intl': 'ReactIntl',
 			'prop-types': 'PropTypes'
 		};
 		config.plugins.push(

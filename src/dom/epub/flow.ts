@@ -613,6 +613,11 @@ export class PaginatedFlow extends AbstractFlow {
 		}
 
 		this.currentSectionIndex = index;
+
+		if (options?.ifNeeded && isPageRectVisible(getBoundingPageRect(target), this._iframeWindow, 0)) {
+			return;
+		}
+
 		let rect = (target instanceof PersistentRange ? target.toRange() : target).getBoundingClientRect();
 		let x = rect.x + this._sectionsContainer.scrollLeft;
 		let y = rect.y + this._sectionsContainer.scrollTop;
@@ -680,7 +685,7 @@ export class PaginatedFlow extends AbstractFlow {
 			this.navigateToPreviousSection();
 			this._sectionsContainer.scrollTo({
 				left: this._sectionsContainer.scrollWidth,
-				top: this._sectionsContainer.scrollHeight
+				top: this._sectionsContainer.offsetHeight - this._spreadHeight - this._sectionsContainer.scrollHeight
 			});
 			this._onViewUpdate();
 			return;

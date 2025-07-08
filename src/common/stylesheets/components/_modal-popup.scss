@@ -175,6 +175,7 @@
 .appearance-popup {
 	width: 310px;
 	padding: 12px;
+	gap: 12px;
 	inset-inline-start: 10px;
 	top: $height-toolbar - 3px;
 
@@ -219,6 +220,7 @@
 			display: flex;
 			justify-content: center;
 			align-items: center;
+			position: relative;
 
 			&:active, &.active, &.active-pseudo-class-fix {
 				outline: 3px solid var(--accent-blue50);
@@ -226,6 +228,42 @@
 
 			&.add {
 				color: var(--fill-secondary);
+			}
+
+			> button {
+				width: 100%;
+				height: 100%;
+				text-align: center;
+			}
+
+			.theme-context-menu {
+				height: 18px;
+				opacity: 0;
+				position: absolute;
+				right: 2px;
+				top: 7px;
+				width: 18px;
+				border-radius: 4px;
+				padding: 1px;
+
+				svg {
+					transform: rotate(90deg);
+				}
+			}
+
+			&:hover, &:focus, &:focus-within {
+				.theme-context-menu {
+					opacity: 1;
+
+					&:focus {
+						background-color: rgba(0, 0, 0, .2);
+					}
+				}
+			}
+
+			.theme-context-menu.context-menu-open {
+				opacity: 1;
+				background-color: rgba(0, 0, 0, .2);
 			}
 		}
 	}
@@ -284,10 +322,82 @@
 		}
 	}
 
-	.epub-appearance {
+	.switch {
+		$width: 26px;
+		$height: 15px;
+		$knob-size: $height - 2px;
+		$transition: 0.15s ease-in-out;
+
+		appearance: none;
+		width: $width;
+		height: $height;
+		border-radius: 11px;
+
+		background: rgba(0, 0, 0, 0.09);
+		box-shadow: 0 0.5px 1.5px 0 rgba(0, 0, 0, 0.12) inset,
+					0 0 1px 0 rgba(0, 0, 0, 0.02) inset;
+
+		position: relative;
+		overflow: hidden;
+
+		&::before {
+			content: '';
+			display: block;
+			inset: 0;
+			width: $width;
+			height: $height;
+
+			background-color: var(--accent-blue);
+			background-image: linear-gradient(180deg, rgba(102, 102, 102, 0.75) 0%, rgba(102, 102, 102, 0) 67.71%);
+			background-blend-mode: overlay;
+
+			opacity: 0;
+			transition: opacity $transition;
+		}
+
+		&:active::before {
+			opacity: 0.4;
+		}
+
+		&:checked::before {
+			opacity: 1;
+		}
+
+		&:checked:active::before {
+			opacity: 0.6;
+		}
+
+		&::after {
+			content: '';
+			display: block;
+			position: absolute;
+			width: $knob-size;
+			height: $knob-size;
+			top: 1px;
+			inset-inline-start: 1px;
+
+			background: var(--accent-white);
+			border: 0.5px solid rgba(0, 0, 0, 0.02);
+			border-radius: 100px;
+			box-shadow: 0 0.2px 0.25px 0 rgba(0, 0, 0, 0.12);
+
+			transition: inset-inline-start $transition;
+		}
+
+		&:checked::after {
+			inset-inline-start: $width - $knob-size - 1px;
+		}
+	}
+
+	.reflowable-appearance {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+
+		&.indent {
+			margin-top: 5px;
+			margin-inline-start: 10px;
+		}
 
 		.row {
 			display: grid;

@@ -418,7 +418,7 @@ export function getModeBasedOnColors(bgColor, fgColor) {
  * their virtual cursors to that element. Screen readers just look at rendered content
  * so without this any navigation done via outline/Find in/page input in toolbar gets
  * undone by virtual cursor either remaining where it was or even jumping to the beginning of content.
- * @param target - node to focus from the view. Views keep track of it in  _a11yVirtualCursorTarget obj.
+ * @param target - node to focus from the view. Views keep track of it in _a11yVirtualCursorTarget obj.
  */
 export async function placeA11yVirtualCursor(target) {
 	// Can't focus a textnode, so grab its parent (e.g. <p>)
@@ -427,9 +427,26 @@ export async function placeA11yVirtualCursor(target) {
 	}
 	if (!target) return;
 	let doc = target.ownerDocument;
-	let previousTarget =  doc.querySelector('.a11y-cursor-target');
+	if (!doc.defaultView.frameElement || doc.defaultView.frameElement.ownerDocument !== document) {
+		throw new Error('Virtual cursor target must be inside view iframe');
+	}
+	let previousTarget = doc.querySelector('.a11y-cursor-target');
+
 	// if the target did not change, do nothing
 	if (target == previousTarget && doc.activeElement == target) return;
+	// If focus is outside the iframe (e.g. in the Find popup), abort
+	if (document.activeElement !== doc.defaultView.frameElement) {
+		return;
+	}
+	// If something within the iframe is focused, abort
+	if (doc.activeElement && doc.activeElement !== doc.body) {
+		return;
+	}
+	// If text is selected, abort so we don't deselect it
+	if (doc.getSelection() && !doc.getSelection().isCollapsed) {
+		return;
+	}
+
 	let oldTabIndex = target.getAttribute('tabindex');
 	function blurHandler() {
 		if (oldTabIndex) {
@@ -443,12 +460,11 @@ export async function placeA11yVirtualCursor(target) {
 	// Make it temporarily focusable
 	target.setAttribute('tabindex', '-1');
 	target.classList.add('a11y-cursor-target');
-	target.focus({ preventScroll: true });
+	target.focus({ preventScroll: true, focusVisible: false });
 	// Remove all a11y props if the element is blurred
 	target.addEventListener('blur', blurHandler, { once: true });
 	// Cleanup if the focus did not take
 	if (doc.activeElement != target) {
 		blurHandler({ target });
-		return;
 	}
 }

@@ -2,6 +2,7 @@ import { approximateMatch } from './lib/approximate-match';
 import { measureTextAnnotationDimensions } from '../pdf/lib/text-annotation';
 import { ANNOTATION_POSITION_MAX_SIZE } from './defines';
 import { basicDeepEqual, sortTags } from './lib/utilities';
+import { isSelector } from "../dom/common/lib/selector";
 
 const DEBOUNCE_TIME = 1000; // 1s
 const DEBOUNCE_MAX_TIME = 10000; // 10s
@@ -12,7 +13,8 @@ class AnnotationManager {
 			query: '',
 			colors: [],
 			tags: [],
-			authors: []
+			authors: [],
+			hiddenIDs: [],
 		};
 		this._readOnly = options.readOnly;
 		this._authorName = options.authorName;
@@ -136,24 +138,34 @@ class AnnotationManager {
 			if (annotation.position || annotation.color) {
 				annotation.image = undefined;
 			}
-			// All properties in the existing annotation position are preserved except nextPageRects,
-			// which isn't preserved only when a new rects property is given
-			let deleteNextPageRects = annotation.position?.rects && !annotation.position?.nextPageRects;
-			annotation = {
-				...existingAnnotation,
-				...annotation,
-				position: { ...existingAnnotation.position, ...annotation.position }
-			};
-			if (!annotation.image) {
-				delete annotation.image;
-			}
-			if (deleteNextPageRects) {
-				delete annotation.position.nextPageRects;
-			}
 
-			// Updating annotation position when editing comment
-			if (annotation.type === 'text' && existingAnnotation.comment !== annotation.comment) {
-				annotation.position = measureTextAnnotationDimensions(annotation, { adjustSingleLineWidth: true, enableSingleLineMaxWidth: true });
+			if (existingAnnotation.position && isSelector(existingAnnotation.position)) {
+				// EPUB/Snapshot: Just merge top-level properties
+				annotation = {
+					...existingAnnotation,
+					...annotation,
+				};
+			}
+			else {
+				// PDF: All properties in the existing annotation position are preserved except nextPageRects,
+				// which isn't preserved only when a new rects property is given
+				let deleteNextPageRects = annotation.position?.rects && !annotation.position?.nextPageRects;
+				annotation = {
+					...existingAnnotation,
+					...annotation,
+					position: { ...existingAnnotation.position, ...annotation.position }
+				};
+				if (!annotation.image) {
+					delete annotation.image;
+				}
+				if (deleteNextPageRects) {
+					delete annotation.position.nextPageRects;
+				}
+
+				// Updating annotation position when editing comment
+				if (annotation.type === 'text' && existingAnnotation.comment !== annotation.comment) {
+					annotation.position = measureTextAnnotationDimensions(annotation, { adjustSingleLineWidth: true, enableSingleLineMaxWidth: true });
+				}
 			}
 
 			annotation.dateModified = (new Date()).toISOString();
@@ -174,10 +186,11 @@ class AnnotationManager {
 		);
 		// Don't delete anything if the PDF file is read-only, or at least one provided annotation is external
 		if (!ids.length || this._readOnly || someExternal) {
-			return;
+			return 0;
 		}
 		let changedAnnotations = new Map(ids.map(id => [id, null]));
 		this._applyChanges(changedAnnotations);
+		return changedAnnotations.size;
 	}
 
 	convertAnnotations(ids, type) {
@@ -387,7 +400,12 @@ class AnnotationManager {
 		this._annotations.forEach(x => delete x._score);
 
 		let annotations = this._annotations.slice();
-		let { tags, colors, authors } = this._filter;
+		let { tags, colors, authors, query, hiddenIDs } = this._filter;
+
+		if (hiddenIDs.length) {
+			annotations = annotations.filter(x => !hiddenIDs.includes(x.id));
+		}
+
 		if (tags.length || colors.length || authors.length) {
 			annotations = annotations.filter(x => (
 				tags && x.tags.some(t => tags.includes(t.name))
@@ -396,9 +414,9 @@ class AnnotationManager {
 			));
 		}
 
-		if (this._filter.query) {
+		if (query) {
 			annotations = annotations.slice();
-			let query = this._filter.query.toLowerCase();
+			query = query.toLowerCase();
 			let results = [];
 			for (let annotation of annotations) {
 				let errors = null;

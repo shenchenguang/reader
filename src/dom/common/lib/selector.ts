@@ -65,9 +65,17 @@ export function isTextPosition(selector: Selector): selector is TextPositionSele
 	return selector.type === 'TextPositionSelector';
 }
 
-export function textPositionFromRange(range: Range, root: Element): TextPositionSelector | null {
+export function isSelector(maybeSelector: any): maybeSelector is Selector {
+	if (!('type' in maybeSelector)) {
+		return false;
+	}
+	let selector = maybeSelector as Selector;
+	return isFragment(selector) || isCss(selector) || isTextQuote(selector) || isTextPosition(selector);
+}
+
+export function textPositionFromRange(range: Range, root: Node): TextPositionSelector | null {
 	range = moveRangeEndsIntoTextNodes(range);
-	let iter = root.ownerDocument.createNodeIterator(root, NodeFilter.SHOW_TEXT);
+	let iter = root.ownerDocument!.createNodeIterator(root, NodeFilter.SHOW_TEXT);
 	let selector: Partial<TextPositionSelector> = {
 		type: 'TextPositionSelector'
 	};

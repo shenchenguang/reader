@@ -9,7 +9,9 @@ import React, {
 import {
 	caretPositionFromPoint,
 	collapseToOneCharacterAtStart,
-	getBoundingPageRect, getPageRects,
+	getBoundingPageRect,
+	getColumnSeparatedPageRects,
+	getPageRects,
 	splitRangeToTextNodes,
 	supportsCaretPositionFromPoint
 } from "../../lib/range";
@@ -18,7 +20,7 @@ import ReactDOM from "react-dom";
 import { IconNoteLarge } from "../../../../common/components/common/icons";
 import { closestElement, isRTL, isVertical } from "../../lib/nodes";
 import { isSafari } from "../../../../common/lib/utilities";
-import { rectsEqual, rectIntersects, getBoundingRect, isPageRectVisible } from "../../lib/rect";
+import { expandRect, getBoundingRect, rectsEqual } from "../../lib/rect";
 import cx from "classnames";
 
 export type DisplayedAnnotation = {
@@ -304,7 +306,7 @@ let HighlightOrUnderline: React.FC<HighlightOrUnderlineProps> = (props) => {
 			commentIconPosition = null;
 		}
 
-		return { rects, interactiveRects, commentIconPosition };
+		return { rects: Array.from(rects.values()), interactiveRects, commentIconPosition };
 	}, [annotation, isResizing, resizedRange]);
 
 	let vert = isVertical(annotation.range.commonAncestorContainer);
@@ -312,21 +314,57 @@ let HighlightOrUnderline: React.FC<HighlightOrUnderlineProps> = (props) => {
 	let underline = annotation.type === 'underline';
 	let rectGroup = useMemo(() => {
 		return <g ref={rectGroupRef}>
-			{[...rects.entries()].map(([key, rect]) => (
+			{rects.map((rect, i) => (
 				<rect
 					x={vert && underline ? rect.x + (rtl ? -3 : rect.width) : rect.x}
 					y={!vert && underline ? rect.y + rect.height : rect.y}
 					width={vert && underline ? 3 : rect.width}
 					height={!vert && underline ? 3 : rect.height}
 					opacity="50%"
-					key={key}
+					key={i}
 				/>
 			))}
 		</g>;
 	}, [rects, rtl, underline, vert]);
 
 	let foreignObjects = useMemo(() => {
-		return !isResizing && [...rects.entries()].map(([key, rect]) => (
+		if (isResizing) {
+			return [];
+		}
+
+		let isCoarsePointer = window.matchMedia('(pointer: coarse').matches;
+
+		if (isCoarsePointer && isSafari) {
+			// If the user is using a coarse pointer (touch device) on Safari:
+			//  - Use the entire bounding rect as the tap target, with a 10px margin
+			//  - Don't use a foreignObject, just a normal rect, because Safari
+			//    makes foreignObjects eat all pointer events within their bounds
+			//    with no regard for Z ordering. The foreignObject isn't necessary
+			//    on mobile anyway because we don't support dragging.
+			let rect = expandRect(getBoundingRect(rects), 10);
+			return (
+				<rect
+					fill="transparent"
+					x={rect.x}
+					y={rect.y}
+					width={rect.width}
+					height={rect.height}
+					className="needs-pointer-events annotation-div"
+					onPointerDown={handlePointerDown}
+					onPointerUp={handlePointerUp}
+					onContextMenu={handleContextMenu}
+					data-annotation-id={annotation.id}
+				/>
+			);
+		}
+
+		let clickTargetRects = isCoarsePointer
+			// As in the Safari case above, use the full bounding rect as the tap
+			// target if the user is using a touch device
+			? [expandRect(getBoundingRect(rects), 10)]
+			: rects;
+
+		return clickTargetRects.map((rect, i) => (
 			// Yes, this is horrible, but SVGs don't support drag events without embedding HTML in a <foreignObject>
 			<foreignObject
 				x={rect.x}
@@ -334,7 +372,7 @@ let HighlightOrUnderline: React.FC<HighlightOrUnderlineProps> = (props) => {
 				width={rect.width}
 				height={rect.height}
 				className="needs-pointer-events"
-				key={key + '-foreign'}
+				key={i + '-foreign'}
 			>
 				<div
 					className={cx('annotation-div', { 'disable-pointer-events': interactiveRects.has(rect) })}
@@ -355,7 +393,7 @@ let HighlightOrUnderline: React.FC<HighlightOrUnderlineProps> = (props) => {
 		return allowResize && (
 			<Resizer
 				annotation={annotation}
-				highlightRects={[...rects.values()]}
+				highlightRects={rects}
 				onResizeStart={handleResizeStart}
 				onResizeEnd={handleResizeEnd}
 				onResize={handleResize}
@@ -363,7 +401,7 @@ let HighlightOrUnderline: React.FC<HighlightOrUnderlineProps> = (props) => {
 		);
 	}, [allowResize, annotation, handleResize, handleResizeEnd, handleResizeStart, rects]);
 
-	if (!rects.size) {
+	if (!rects.length) {
 		return null;
 	}
 
@@ -378,7 +416,6 @@ let HighlightOrUnderline: React.FC<HighlightOrUnderlineProps> = (props) => {
 	return <>
 		<g
 			tabIndex={-1}
-			onPointerDown={e => e.preventDefault()}
 			data-annotation-id={annotation.id}
 			fill={annotation.color}
 			ref={outerGroupRef}
@@ -562,27 +599,12 @@ type SelectionBorderProps = {
 
 let SplitSelectionBorder: React.FC<SplitSelectionBorderProps> = (props) => {
 	let { range } = props;
-	let section = closestElement(range.commonAncestorContainer)?.closest('[data-section-index]');
-	if (section) {
-		let sectionRects = Array.from(getPageRects(section));
-		let rangeRects = Array.from(getPageRects(range));
-		return <>
-			{sectionRects
-				.filter(sectionRect => isPageRectVisible(sectionRect, section.ownerDocument.defaultView!))
-				.map((sectionRect, i) => {
-					let rangeRectsWithinSection = rangeRects
-						.filter(rangeRect => rectIntersects(rangeRect, sectionRect));
-					if (!rangeRectsWithinSection.length) {
-						return null;
-					}
-					return <SelectionBorder rect={getBoundingRect(rangeRectsWithinSection)} key={i}/>;
-				})
-			}
-		</>;
-	}
-	else {
-		return <SelectionBorder rect={getBoundingPageRect(range)} />;
-	}
+	return (
+		<>
+			{getColumnSeparatedPageRects(range)
+				.map((sectionRect, i) => <SelectionBorder rect={sectionRect} key={i}/>)}
+		</>
+	);
 };
 SplitSelectionBorder.displayName = 'SelectionBorder';
 type SplitSelectionBorderProps = {
@@ -590,12 +612,14 @@ type SplitSelectionBorderProps = {
 };
 
 const Resizer: React.FC<ResizerProps> = (props) => {
-	const SIZE = 3;
-
 	let { annotation, highlightRects, onResize, onResizeEnd, onResizeStart } = props;
+
 	let [resizingSide, setResizingSide] = useState<false | 'start' | 'end'>(false);
 	let [pointerCapture, setPointerCapture] = useState<{ elem: Element, pointerId: number } | null>(null);
 	let [lastPointerMove, setLastPointerMove] = useState<React.PointerEvent | null>(null);
+
+	let isCoarsePointer = window.matchMedia('(pointer: coarse').matches;
+	let size = isCoarsePointer ? 6 : 3;
 
 	let handlePointerDown = useCallback((event: React.PointerEvent) => {
 		if (event.button !== 0) {
@@ -750,10 +774,10 @@ const Resizer: React.FC<ResizerProps> = (props) => {
 	let bottomRightRect = highlightRects[highlightRects.length - 1];
 	return <>
 		<rect
-			x={vert ? topLeftRect.left : topLeftRect.left - SIZE}
-			y={vert ? topLeftRect.top - SIZE : topLeftRect.top}
-			width={vert ? topLeftRect.width : SIZE}
-			height={vert ? SIZE : topLeftRect.height}
+			x={vert ? topLeftRect.left : topLeftRect.left - size}
+			y={vert ? topLeftRect.top - size : topLeftRect.top}
+			width={vert ? topLeftRect.width : size}
+			height={vert ? size : topLeftRect.height}
 			fill={annotation.color}
 			className={cx('resizer inherit-pointer-events', { 'resizer-vertical': vert })}
 			onPointerDown={handlePointerDown}
@@ -766,8 +790,8 @@ const Resizer: React.FC<ResizerProps> = (props) => {
 		<rect
 			x={vert ? bottomRightRect.left : bottomRightRect.right}
 			y={vert ? bottomRightRect.bottom : bottomRightRect.top}
-			width={vert ? bottomRightRect.width : SIZE}
-			height={vert ? SIZE : bottomRightRect.height}
+			width={vert ? bottomRightRect.width : size}
+			height={vert ? size : bottomRightRect.height}
 			fill={annotation.color}
 			className={cx("resizer inherit-pointer-events", { 'resizer-vertical': vert })}
 			onPointerDown={handlePointerDown}
