@@ -1,25 +1,23 @@
-import Reader from './common/reader';
-import pdf from '../demo/pdf';
-import epub from '../demo/epub';
-import snapshot from '../demo/snapshot';
+import epub from "../demo/epub";
+import pdf from "../demo/pdf";
+import snapshot from "../demo/snapshot";
+import Reader from "./common/reader";
 
 window.dev = true;
 
 async function createReader() {
 	if (window._reader) {
-		throw new Error('Reader is already initialized');
+		throw new Error("Reader is already initialized");
 	}
 	let queryString = window.location.search;
 	let urlParams = new URLSearchParams(queryString);
-	let type = urlParams.get('type') || 'pdf';
+	let type = urlParams.get("type") || "pdf";
 	let demo;
-	if (type === 'pdf') {
+	if (type === "pdf") {
 		demo = pdf;
-	}
-	else if (type === 'epub') {
+	} else if (type === "epub") {
 		demo = epub;
-	}
-	else if (type === 'snapshot') {
+	} else if (type === "snapshot") {
 		demo = snapshot;
 	}
 	let res = await fetch(demo.fileName);
@@ -28,7 +26,7 @@ async function createReader() {
 		readOnly: false,
 		data: {
 			buf: new Uint8Array(await res.arrayBuffer()),
-			url: new URL('/', window.location).toString()
+			url: new URL("/", window.location).toString(),
 		},
 		// rtl: true,
 		annotations: demo.annotations,
@@ -36,76 +34,104 @@ async function createReader() {
 		sidebarWidth: 240,
 		bottomPlaceholderHeight: null,
 		toolbarPlaceholderWidth: 0,
-		authorName: 'John',
+		authorName: "John",
 		showAnnotations: true,
 		// platform: 'web',
-		platform: 'zetero',
+		platform: "zetero",
 
 		lightTheme: true,
+		translateList: [
+			{
+				key: "silicon",
+				value: "SiliconCloud 翻译",
+			},
+			{
+				key: "zhipu",
+				value: "智谱 GLM 翻译",
+			},
+			{
+				key: "hunyuan",
+				value: "混元翻译",
+			},
+			{
+				key: "aegean",
+				value: "Aegean 翻译",
+			},
+		],
 		// password: 'test',
 		onOpenContextMenu(params) {
 			reader.openContextMenu(params);
 		},
 		onAddToNote() {
-			alert('Add annotations to the current note');
+			alert("Add annotations to the current note");
 		},
 		onSaveAnnotations: async function (annotations) {
-			console.log('Save annotations', annotations);
+			console.log("Save annotations", annotations);
 		},
 		onDeleteAnnotations: function (ids) {
-			console.log('Delete annotations', JSON.stringify(ids));
+			console.log("Delete annotations", JSON.stringify(ids));
 		},
 		onChangeViewState: function (state, primary) {
-			console.log('Set state', state, primary);
+			console.log("Set state", state, primary);
 		},
 		onOpenTagsPopup(annotationID, left, top) {
-			alert(`Opening Zotero tagbox popup for id: ${annotationID}, left: ${left}, top: ${top}`);
+			alert(
+				`Opening Zotero tagbox popup for id: ${annotationID}, left: ${left}, top: ${top}`
+			);
 		},
 		onClosePopup(data) {
-			console.log('onClosePopup', data);
+			console.log("onClosePopup", data);
 		},
 		onOpenLink(url) {
-			alert('Navigating to an external link: ' + url);
+			alert("Navigating to an external link: " + url);
 		},
 		onToggleSidebar: (open) => {
-			console.log('Sidebar toggled', open);
+			console.log("Sidebar toggled", open);
 		},
 		onChangeSidebarWidth(width) {
-			console.log('Sidebar width changed', width);
+			console.log("Sidebar width changed", width);
 		},
 		onSetDataTransferAnnotations(dataTransfer, annotations, fromText) {
-			console.log('Set formatted dataTransfer annotations', dataTransfer, annotations, fromText);
+			console.log(
+				"Set formatted dataTransfer annotations",
+				dataTransfer,
+				annotations,
+				fromText
+			);
 		},
 		onConfirm(title, text, confirmationButtonTitle) {
 			return window.confirm(text);
 		},
 		onRotatePages(pageIndexes, degrees) {
-			console.log('Rotating pages', pageIndexes, degrees);
+			console.log("Rotating pages", pageIndexes, degrees);
 		},
 		onDeletePages(pageIndexes, degrees) {
-			console.log('Deleting pages', pageIndexes, degrees);
+			console.log("Deleting pages", pageIndexes, degrees);
 		},
 		onToggleContextPane() {
-			console.log('Toggle context pane');
+			console.log("Toggle context pane");
 		},
 		onTextSelectionAnnotationModeChange(mode) {
 			console.log(`Change text selection annotation mode to '${mode}'`);
 		},
 		onSaveCustomThemes(customThemes) {
-			console.log('Save custom themes', customThemes);
-		}
+			console.log("Save custom themes", customThemes);
+		},
 	});
 	reader.enableAddToNote(false);
 	reader.setSelectedTextMenu([
-		{ label: "test1", onCommand: annotation => console.log(annotation) },
-		{ label: "Copy", onCommand: annotation => alert(annotation) },
-		{ label: "Highlight", onCommand: annotation => alert(annotation) }
+		{ label: "test1", onCommand: (annotation) => console.log(annotation) },
+		{ label: "Copy", onCommand: (annotation) => alert(annotation) },
+		{ label: "Highlight", onCommand: (annotation) => alert(annotation) },
 	]);
 	window._reader = reader;
 	window._reader._annotationManager._onSave = async function (annotations) {
-		console.log('Save annotations1111', annotations);
+		console.log("Save annotations1111", annotations);
 	};
-	console.log('Reader initialized', window._reader._annotationManager._onSave);
+	console.log(
+		"Reader initialized",
+		window._reader._annotationManager._onSave
+	);
 
 	await reader.initializedPromise;
 }

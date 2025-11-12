@@ -63,7 +63,11 @@ import {
 } from "./lib/rect";
 import { History } from "../../common/lib/history";
 import { closestMathTeX } from "./lib/math";
-import { DEFAULT_REFLOWABLE_APPEARANCE } from "./defines";
+import {
+	DEFAULT_REFLOWABLE_APPEARANCE,
+	PageWidth,
+	ReflowableAppearance
+} from "./defines";
 
 abstract class DOMView<State extends DOMViewState, Data> {
 	readonly MIN_SCALE = 0.6;
@@ -1975,18 +1979,7 @@ export interface NavigateOptions extends CustomScrollIntoViewOptions {
 	skipHistory?: boolean;
 }
 
-export interface ReflowableAppearance {
-	lineHeight: number;
-	wordSpacing: number;
-	letterSpacing: number;
-	pageWidth: PageWidth;
-	useOriginalFont: boolean;
-}
-
-export const enum PageWidth {
-	Narrow = -1,
-	Normal = 0,
-	Full = 1
-}
-
 export default DOMView;
+
+export type { ReflowableAppearance } from "./defines";
+export { PageWidth } from "./defines";

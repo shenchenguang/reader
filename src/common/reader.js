@@ -1,10 +1,13 @@
-import { createRoot } from 'react-dom/client';
 import React, { createContext } from 'react';
-import ReaderUI from './components/reader-ui';
-import PDFView from '../pdf/pdf-view';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import EPUBView from '../dom/epub/epub-view';
 import SnapshotView from '../dom/snapshot/snapshot-view';
+import { addFTL, getLocalizedString } from '../fluent';
+import { initPDFPrintService } from '../pdf/pdf-print-service';
+import PDFView from '../pdf/pdf-view';
 import AnnotationManager from './annotation-manager';
+import ReaderUI from './components/reader-ui';
 import {
 	createAnnotationContextMenu,
 	createColorContextMenu,
@@ -13,18 +16,15 @@ import {
 	createThumbnailContextMenu,
 	createViewContextMenu
 } from './context-menu';
-import { initPDFPrintService } from '../pdf/pdf-print-service';
 import { ANNOTATION_COLORS, DEBOUNCE_STATE_CHANGE, DEBOUNCE_STATS_CHANGE, DEFAULT_THEMES } from './defines';
 import { FocusManager } from './focus-manager';
 import { KeyboardManager } from './keyboard-manager';
+import { debounce } from './lib/debounce';
 import {
 	getCurrentColorScheme,
 	getImageDataURL, isMac,
 	setMultiDragPreview,
 } from './lib/utilities';
-import { debounce } from './lib/debounce';
-import { flushSync } from 'react-dom';
-import { addFTL, getLocalizedString } from '../fluent';
 
 // Compute style values for usage in views (CSS variables aren't sufficient for that)
 // Font family is necessary for text annotations
@@ -72,6 +72,11 @@ class Reader {
 		// Only used on Zotero client, sets text/plain and text/html values from Note Markdown and Note HTML translators
 		this._onSetDataTransferAnnotations = options.onSetDataTransferAnnotations;
 		this._onSetZoom = options.onSetZoom;
+		this._translateList = Array.isArray(options.translateList) ? options.translateList : [];
+		this._onStartTranslation = options.onStartTranslation;
+		this._onStopTranslation = options.onStopTranslation;
+		this._onDownloadTranslation = options.onDownloadTranslation;
+		this._onDownloadOriginal = options.onDownloadOriginal;
 
 		if (Array.isArray(options.ftl)) {
 			for (let ftl of options.ftl) {
@@ -168,6 +173,7 @@ class Reader {
 			autoDisableImageTool: options.autoDisableImageTool !== undefined ? options.autoDisableImageTool : true,
 			textSelectionAnnotationMode: options.textSelectionAnnotationMode || 'highlight',
 			colorScheme: options.colorScheme,
+			translationControlsVisible: this._type !== 'pdf',
 			tool: this._tools['pointer'], // Must always be a reference to one of this._tools objects
 			thumbnails: [],
 			outline: null, // null — loading, [] — empty
@@ -371,6 +377,12 @@ class Reader {
 						onFindNext={this.findNext.bind(this)}
 						onFindPrevious={this.findPrevious.bind(this)}
 						onToggleContextPane={this._onToggleContextPane}
+						translateList={this._translateList}
+						showTranslationControls={this._state.translationControlsVisible}
+						onStartTranslation={this._onStartTranslation}
+						onStopTranslation={this._onStopTranslation}
+						onDownloadTranslation={this._onDownloadTranslation}
+						onDownloadOriginal={this._onDownloadOriginal}
 						onChangeTextSelectionAnnotationMode={this.setTextSelectionAnnotationMode.bind(this)}
 						onCloseOverlayPopup={this._handleOverlayPopupClose.bind(this)}
 						onChangeSplitType={(type) => {
@@ -781,6 +793,24 @@ class Reader {
 		this._updateState({ [primary ? 'primaryViewOverlayPopup' : 'secondaryViewOverlayPopup']: null });
 	}
 
+	_handleDocumentLanguageDetected(info) {
+		if (!info) {
+			return;
+		}
+		let translationControlsVisible = info.isEnglish !== false;
+		let nextState = {};
+		let changed = false;
+		if (this._state.translationControlsVisible !== translationControlsVisible) {
+			nextState.translationControlsVisible = translationControlsVisible;
+			changed = true;
+		}
+		console.log('changed', changed);
+		console.log('nextState', nextState);
+		if (changed) {
+			this._updateState(nextState);
+		}
+	}
+
 	setTextSelectionAnnotationMode(mode) {
 		if (!['highlight', 'underline'].includes(mode)) {
 			throw new Error(`Invalid 'textSelectionAnnotationMode' value '${mode}'`);
@@ -1064,7 +1094,8 @@ class Reader {
 			onKeyUp,
 			onFocusAnnotation,
 			onSetHiddenAnnotations,
-			getLocalizedString
+			getLocalizedString,
+			onDetectDocumentLanguage: this._handleDocumentLanguageDetected.bind(this)
 		};
 
 		if (this._type === 'pdf') {

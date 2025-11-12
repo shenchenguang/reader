@@ -1,8 +1,66 @@
-import Page from './page';
+import {
+	A11Y_VIRT_CURSOR_DEBOUNCE_LENGTH,
+	MIN_IMAGE_ANNOTATION_SIZE,
+	PDF_NOTE_DIMENSIONS
+} from '../common/defines';
+import { debounce } from '../common/lib/debounce';
+import { History } from '../common/lib/history';
+import PopupDelayer from '../common/lib/popup-delayer';
+import {
+	debounceUntilScrollFinishes,
+	getAffectedAnnotations,
+	getCodeCombination,
+	getKeyCombination,
+	getModeBasedOnColors,
+	isFirefox,
+	isLinux,
+	isMac,
+	isSafari,
+	isWin,
+	placeA11yVirtualCursor,
+	throttle
+} from '../common/lib/utilities';
+import { AutoScroll } from './lib/auto-scroll';
 import { p2v, v2p } from './lib/coordinates';
+import {
+	applyTransformationMatrixToInkPosition,
+	eraseInk,
+	smoothPath
+} from './lib/path';
+import { drawAnnotationsOnCanvas } from './lib/render';
+import { measureTextAnnotationDimensions } from './lib/text-annotation';
+import {
+	adjustRectHeightByRatio,
+	applyInverseTransform,
+	applyTransform,
+	calculateScale,
+	distanceBetweenRects,
+	getAxialAlignedBoundingBox,
+	getBoundingBox,
+	getClosestObject,
+	getOutlinePath,
+	getPageIndexesFromAnnotations,
+	getPositionBoundingRect,
+	getRectsAreaSize,
+	getRotationDegrees,
+	getRotationTransform,
+	getScaleTransform,
+	getTransformFromRects,
+	intersectAnnotationWithPoint,
+	inverseTransform,
+	normalizeDegrees,
+	quickIntersectRect,
+	scaleShape,
+	transform,
+} from './lib/utilities';
+import Page from './page';
+import { FindState, PDFFindController } from './pdf-find-controller';
+import PDFRenderer from './pdf-renderer';
+import { PDFThumbnails } from './pdf-thumbnails';
 import {
 	getLineSelectionRanges,
 	getModifiedSelectionRanges,
+	getNodeOffset,
 	getRectRotationOnText,
 	getReversedSelectionRanges,
 	getSelectionRanges,
@@ -10,65 +68,49 @@ import {
 	getSortIndex,
 	getTextFromSelectionRanges,
 	getWordSelectionRanges,
-	setTextLayerSelection,
-	getNodeOffset
+	setTextLayerSelection
 } from './selection';
-import {
-	applyInverseTransform,
-	applyTransform, adjustRectHeightByRatio,
-	getPageIndexesFromAnnotations,
-	getPositionBoundingRect,
-	intersectAnnotationWithPoint,
-	quickIntersectRect,
-	transform,
-	getBoundingBox,
-	inverseTransform,
-	scaleShape,
-	getRotationTransform,
-	getScaleTransform,
-	calculateScale,
-	getAxialAlignedBoundingBox,
-	distanceBetweenRects,
-	getTransformFromRects,
-	getRotationDegrees,
-	normalizeDegrees,
-	getRectsAreaSize,
-	getClosestObject,
-	getOutlinePath,
-} from './lib/utilities';
-import {
-	debounceUntilScrollFinishes,
-	getCodeCombination,
-	getKeyCombination,
-	getAffectedAnnotations,
-	isMac,
-	isLinux,
-	isWin,
-	isFirefox,
-	isSafari,
-	throttle,
-	getModeBasedOnColors,
-	placeA11yVirtualCursor
-} from '../common/lib/utilities';
-import { debounce } from '../common/lib/debounce';
-import { AutoScroll } from './lib/auto-scroll';
-import { PDFThumbnails } from './pdf-thumbnails';
-import {
-	MIN_IMAGE_ANNOTATION_SIZE,
-	PDF_NOTE_DIMENSIONS,
-	A11Y_VIRT_CURSOR_DEBOUNCE_LENGTH
-} from '../common/defines';
-import PDFRenderer from './pdf-renderer';
-import { drawAnnotationsOnCanvas } from './lib/render';
-import PopupDelayer from '../common/lib/popup-delayer';
-import { measureTextAnnotationDimensions } from './lib/text-annotation';
-import {
-	applyTransformationMatrixToInkPosition,
-	eraseInk,
-	smoothPath
-} from './lib/path';
-import { History } from '../common/lib/history';
-import { FindState, PDFFindController } from './pdf-find-controller';
+
+const MAX_LANGUAGE_SAMPLE_LENGTH = 2000;
+const MAX_LANGUAGE_SAMPLE_PAGES = 3;
+
+function isLikelyEnglishText(sample) {
+	if (!sample) {
+		return false;
+	}
+	const stripped = sample.replace(/\s+/g, '');
+	if (!stripped) {
+		return false;
+	}
+	const asciiLetters = (stripped.match(/[A-Za-z]/g) || []).length;
+	if (!asciiLetters) {
+		return false;
+	}
+	const nonAscii = (stripped.match(/[^\x00-\x7F]/g) || []).length;
+	const asciiRatio = asciiLetters / stripped.length;
+	const nonAsciiRatio = nonAscii / stripped.length;
+	return asciiRatio > 0.55 && nonAsciiRatio < 0.2;
+}
+
+function extractTextFromChars(chars) {
+	if (!Array.isArray(chars) || !chars.length) {
+		return '';
+	}
+	let parts = [];
+	for (let char of chars) {
+		if (!char) {
+			continue;
+		}
+		let text = typeof char.u === 'string' ? char.u : char.char || '';
+		if (text) {
+			parts.push(text);
+		}
+		if (char.spaceAfter || char.lineBreakAfter || char.paragraphBreakAfter) {
+			parts.push(' ');
+		}
+	}
+	return parts.join('');
+}
 
 class PDFView {
 	constructor(options) {
@@ -106,6 +148,7 @@ class PDFView {
 		this._onFocusAnnotation = options.onFocusAnnotation;
 
 		this._onTabOut = options.onTabOut;
+		this._onDetectDocumentLanguage = options.onDetectDocumentLanguage;
 
 		this._viewState = options.viewState || { pageIndex: 0, scale: "page-width", scrollMode: 0, spreadMode: 0 };
 		this._location = options.location;
@@ -152,6 +195,7 @@ class PDFView {
 		this._overlayPopupDelayer = new PopupDelayer({ open: !!this._overlayPopup });
 
 		this._selectionRanges = [];
+		this._languageDetectionDone = false;
 
 		this._iframe = document.createElement('iframe');
 		this._iframe.addEventListener('load', () => this._iframe.classList.add('loaded'));
@@ -528,6 +572,42 @@ class PDFView {
 		}
 		this._render();
 		this._updateViewStats();
+		this._detectDocumentLanguage();
+	}
+
+	async _detectDocumentLanguage() {
+		if (this._languageDetectionDone || !this._onDetectDocumentLanguage) {
+			return;
+		}
+		const pdfDocument = this._iframeWindow?.PDFViewerApplication?.pdfDocument;
+		if (!pdfDocument) {
+			return;
+		}
+		this._languageDetectionDone = true;
+		try {
+			let sampleText = '';
+			let pagesToInspect = Math.min(pdfDocument.numPages || 0, MAX_LANGUAGE_SAMPLE_PAGES);
+			for (let i = 0; i < pagesToInspect && sampleText.length < MAX_LANGUAGE_SAMPLE_LENGTH; i++) {
+				let pageData = await pdfDocument.getPageData({ pageIndex: i });
+				let charsText = extractTextFromChars(pageData?.chars);
+				if (charsText) {
+					sampleText += charsText;
+					if (sampleText.length > MAX_LANGUAGE_SAMPLE_LENGTH) {
+						sampleText = sampleText.slice(0, MAX_LANGUAGE_SAMPLE_LENGTH);
+					}
+				}
+			}
+			sampleText = sampleText.trim();
+			let isEnglish = sampleText ? isLikelyEnglishText(sampleText) : false;
+			this._onDetectDocumentLanguage({
+				isEnglish
+			});
+		} catch (error) {
+			console.warn('Failed to detect PDF document language', error);
+			this._onDetectDocumentLanguage({
+				isEnglish: false
+			});
+		}
 	}
 
 	async _ensureBasicPageData(pageIndex) {

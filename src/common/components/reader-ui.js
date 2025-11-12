@@ -1,23 +1,23 @@
-import React, { Fragment, useState, useRef, useImperativeHandle } from 'react';
 import { LocalizationProvider, ReactLocalization } from "@fluent/react";
-import Toolbar from './toolbar';
-import Sidebar from './sidebar/sidebar';
-import SelectionPopup from './view-popup/selection-popup';
-import FindPopup from './view-popup/find-popup';
-import AnnotationPopup from './view-popup/annotation-popup';
-import AnnotationsView from './sidebar/annotations-view';
-import SidebarResizer from './sidebar/sidebar-resizer';
-import SplitViewResizer from './split-view-resizer';
-import ThumbnailsView from './sidebar/thumbnails-view';
-import OutlineView from './sidebar/outline-view';
-import OverlayPopup from './view-popup/overlay-popup';
+import React, { Fragment, useImperativeHandle, useRef, useState } from 'react';
+import { bundle } from '../../fluent';
 import ContextMenu from './context-menu';
+import AppearancePopup from "./modal-popup/appearance-popup";
 import LabelPopup from './modal-popup/label-popup';
 import PasswordPopup from './modal-popup/password-popup';
 import PrintPopup from './modal-popup/print-popup';
-import AppearancePopup from "./modal-popup/appearance-popup";
 import ThemePopup from './modal-popup/theme-popup';
-import { bundle } from '../../fluent';
+import AnnotationsView from './sidebar/annotations-view';
+import OutlineView from './sidebar/outline-view';
+import Sidebar from './sidebar/sidebar';
+import SidebarResizer from './sidebar/sidebar-resizer';
+import ThumbnailsView from './sidebar/thumbnails-view';
+import SplitViewResizer from './split-view-resizer';
+import Toolbar from './toolbar';
+import AnnotationPopup from './view-popup/annotation-popup';
+import FindPopup from './view-popup/find-popup';
+import OverlayPopup from './view-popup/overlay-popup';
+import SelectionPopup from './view-popup/selection-popup';
 
 function View(props) {
 	let { primary, state } = props;
@@ -127,6 +127,7 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						usePhysicalPageNumbers={viewStats.usePhysicalPageNumbers}
 						percentage={viewStats.percentage || ''}
 						sidebarOpen={state.sidebarOpen}
+						sidebarView={state.sidebarView}
 						enableZoomOut={viewStats.canZoomOut}
 						enableZoomIn={viewStats.canZoomIn}
 						enableZoomReset={viewStats.canZoomReset}
@@ -142,6 +143,7 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						stackedView={stackedView}
 						showContextPaneToggle={showContextPaneToggle}
 						onToggleSidebar={props.onToggleSidebar}
+						onChangeSidebarView={props.onChangeSidebarView}
 						onZoomIn={props.onZoomIn}
 						onZoomOut={props.onZoomOut}
 						onZoomReset={props.onZoomReset}
@@ -154,6 +156,12 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onToggleAppearancePopup={props.onToggleAppearancePopup}
 						onToggleFind={props.onToggleFind}
 						onToggleContextPane={props.onToggleContextPane}
+						translateList={props.translateList}
+						showTranslationControls={state.translationControlsVisible}
+						onStartTranslation={props.onStartTranslation}
+						onStopTranslation={props.onStopTranslation}
+						onDownloadTranslation={props.onDownloadTranslation}
+						onDownloadOriginal={props.onDownloadOriginal}
 					/>
 					<div>
 						{state.sidebarOpen === true &&
