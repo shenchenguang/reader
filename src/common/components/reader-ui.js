@@ -158,10 +158,13 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onToggleContextPane={props.onToggleContextPane}
 						translateList={props.translateList}
 						showTranslationControls={state.translationControlsVisible}
+						translationActive={state.translationActive}
+						translationLoading={state.translationLoading}
 						onStartTranslation={props.onStartTranslation}
 						onStopTranslation={props.onStopTranslation}
 						onDownloadTranslation={props.onDownloadTranslation}
 						onDownloadOriginal={props.onDownloadOriginal}
+						isEnglishDocument={state.documentIsEnglish}
 					/>
 					<div>
 						{state.sidebarOpen === true &&

@@ -29,14 +29,6 @@ export function PopupPreview(props) {
 		props.onOpenPageLabelPopup(props.annotation.id);
 	}
 
-	function handleTagsClick(event) {
-		if (props.readOnly) {
-			return;
-		}
-		let rect = event.target.closest('.tags').getBoundingClientRect();
-		props.onOpenTagsPopup(props.annotation.id, rect.left, rect.top);
-	}
-
 	function handleCommentChange(text) {
 		props.onChange({ id: props.annotation.id, comment: text });
 	}
@@ -115,19 +107,15 @@ export function PopupPreview(props) {
 				</div>
 			)}
 
-			{(!props.readOnly || !!annotation.tags.length) && (
-				<button
-					className="tags"
-					data-tabstop={1}
-					onClick={handleTagsClick}
-					aria-description={l10n.getString('reader-manage-tags')}
-					aria-haspopup={true}
-				>{annotation.tags.length ? annotation.tags.map((tag, index) => (
+		{annotation.tags.length > 0 && (
+			<div className="tags" aria-description={l10n.getString('reader-manage-tags')}>
+				{annotation.tags.map((tag, index) => (
 					<span className="tag" key={index} style={{ color: tag.color }}>{tag.name}</span>
-				)) : l10n.getString('reader-add-tags')}</button>
-			)}
+				))}
+			</div>
+		)}
 
-		</div>
+	</div>
 	);
 }
 
@@ -276,7 +264,7 @@ export function SidebarPreview(props) {
 			className="tag" key={index}
 			style={{ color: tag.color }}
 		>{tag.name}</span>
-	)) : l10n.getString('reader-add-tags');
+	)) : null;
 
 	let expandedState = {};
 	expandedState['expanded' + props.state] = true;
@@ -357,19 +345,11 @@ export function SidebarPreview(props) {
 			)}
 			{text}
 			{comment}
-			{(state >= 1 && !props.readOnly || annotation.tags.length > 0)
-			&& (
-				<button
-					className="tags"
-					data-tabstop={props.selected && !props.readOnly ? 1 : undefined}
-					onClick={e => handleSectionClick(e, 'tags')}
-					draggable={true}
-					onDragStart={handleDragStart}
-					aria-haspopup={true}
-					aria-description={l10n.getString('reader-manage-tags')}
-				>{tags}</button>
-			)}
+		{tags && (
+			<div className="tags">
+				{tags}
+			</div>
+		)}
 		</div>
 	);
 }
-

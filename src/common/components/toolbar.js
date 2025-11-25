@@ -91,12 +91,15 @@ function Toolbar(props) {
 	const [isSidebarDropdownOpen, setIsSidebarDropdownOpen] = useState(false);
 	const [isToolPaletteOpen, setIsToolPaletteOpen] = useState(false);
 	const [isTranslationMenuOpen, setIsTranslationMenuOpen] = useState(false);
-	const [translationActive, setTranslationActive] = useState(false);
 	const translationServices = Array.isArray(props.translateList)
 		? props.translateList
 		: [];
 	const hasTranslation =
 		props.showTranslationControls && translationServices.length > 0;
+	const downloadHasDropdown =
+		props.isEnglishDocument !== false &&
+		translationServices.length > 0 &&
+		props.showTranslationControls;
 	const [selectedTranslationService, setSelectedTranslationService] =
 		useState(() => translationServices[0]?.key || null);
 	const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
@@ -120,7 +123,6 @@ function Toolbar(props) {
 	useEffect(() => {
 		if (!hasTranslation) {
 			setSelectedTranslationService(null);
-			setTranslationActive(false);
 			setIsTranslationMenuOpen(false);
 			return;
 		}
@@ -200,17 +202,17 @@ function Toolbar(props) {
 	}
 
 	function handleTranslationButtonClick() {
-		if (!hasTranslation) {
+		if (!hasTranslation || props.translationLoading) {
 			return;
 		}
-		if (translationActive) {
+		if (props.translationActive) {
 			const selectedService = selectedTranslationService
 				? translationServices.find(
 						(service) => service.key === selectedTranslationService
 				  ) || { key: selectedTranslationService }
 				: null;
-			setTranslationActive(false);
 			props.onStopTranslation?.(selectedService);
+			setIsTranslationMenuOpen(false);
 			return;
 		}
 		setIsTranslationMenuOpen((open) => {
@@ -224,7 +226,11 @@ function Toolbar(props) {
 	}
 
 	function handleStartTranslation() {
-		if (!hasTranslation || !selectedTranslationService) {
+		if (
+			!hasTranslation ||
+			!selectedTranslationService ||
+			props.translationLoading
+		) {
 			return;
 		}
 		let selectedItem = translationServices.find(
@@ -233,7 +239,6 @@ function Toolbar(props) {
 		if (!selectedItem) {
 			return;
 		}
-		setTranslationActive(true);
 		setIsTranslationMenuOpen(false);
 		props.onStartTranslation?.(selectedItem, {
 			pagesCount: props.pagesCount,
@@ -245,6 +250,10 @@ function Toolbar(props) {
 	}
 
 	function handleDownloadMenuToggle() {
+		if (!downloadHasDropdown) {
+			handleDownload("original");
+			return;
+		}
 		setIsDownloadMenuOpen((open) => {
 			let next = !open;
 			if (next) {
@@ -287,7 +296,11 @@ function Toolbar(props) {
 		filteredToolOptions.find((option) => option.type === displayToolType) ||
 		filteredToolOptions[0];
 	const ActiveToolIcon = activeToolOption?.icon || IconHighlight;
-	const translationLabel = translationActive
+	const translationEngaged =
+		props.translationActive || props.translationLoading;
+	const translationLabel = props.translationLoading
+		? l10n.getString("reader-translation-loading")
+		: props.translationActive
 		? l10n.getString("reader-translation-stop")
 		: l10n.getString("reader-translation-full");
 
@@ -436,7 +449,7 @@ function Toolbar(props) {
 				{hasTranslation && (
 					<div
 						className={cx("translation-dropdown", {
-							active: translationActive,
+							active: translationEngaged,
 						})}
 						ref={translationDropdownRef}
 					>
@@ -444,22 +457,22 @@ function Toolbar(props) {
 							type="button"
 							className={cx("toolbar-button translation-toggle", {
 								active:
-									translationActive || isTranslationMenuOpen,
+									translationEngaged || isTranslationMenuOpen,
 							})}
 							tabIndex={-1}
 							onClick={handleTranslationButtonClick}
 							aria-haspopup={
-								!translationActive ? "menu" : undefined
+								!translationEngaged ? "menu" : undefined
 							}
 							aria-expanded={
-								!translationActive && isTranslationMenuOpen
+								!translationEngaged && isTranslationMenuOpen
 							}
 						>
 							<IconTranslate />
 							<span>{translationLabel}</span>
-							{!translationActive && <IconChevronDown8 />}
+							{!translationEngaged && <IconChevronDown8 />}
 						</button>
-						{!translationActive && isTranslationMenuOpen && (
+						{!translationEngaged && isTranslationMenuOpen && (
 							<div
 								className="translation-dropdown-menu"
 								role="menu"
@@ -502,7 +515,10 @@ function Toolbar(props) {
 									type="button"
 									className="translation-start-button"
 									onClick={handleStartTranslation}
-									disabled={!selectedTranslationService}
+									disabled={
+										!selectedTranslationService ||
+										props.translationLoading
+									}
 								>
 									{l10n.getString("reader-translation-start")}
 								</button>
@@ -610,46 +626,39 @@ function Toolbar(props) {
 				>
 					<IconFormatText />
 				</button>
-				{hasTranslation && (
-					<div
-						className="download-dropdown"
-						ref={downloadDropdownRef}
+				<div className="download-dropdown" ref={downloadDropdownRef}>
+					<button
+						type="button"
+						className={cx("toolbar-button download-toggle", {
+							active: isDownloadMenuOpen,
+						})}
+						tabIndex={-1}
+						onClick={handleDownloadMenuToggle}
+						aria-haspopup={downloadHasDropdown ? "menu" : undefined}
+						aria-expanded={
+							downloadHasDropdown && isDownloadMenuOpen
+						}
 					>
-						<button
-							type="button"
-							className={cx("toolbar-button download-toggle", {
-								active: isDownloadMenuOpen,
-							})}
-							tabIndex={-1}
-							onClick={handleDownloadMenuToggle}
-							aria-haspopup="menu"
-							aria-expanded={isDownloadMenuOpen}
-						>
-							<IconDownload />
-							<IconChevronDown8 />
-						</button>
-						{isDownloadMenuOpen && (
-							<div className="download-dropdown-menu" role="menu">
-								<button
-									type="button"
-									onClick={() =>
-										handleDownload("translation")
-									}
-								>
-									{l10n.getString(
-										"reader-download-translation"
-									)}
-								</button>
-								<button
-									type="button"
-									onClick={() => handleDownload("original")}
-								>
-									{l10n.getString("reader-download-original")}
-								</button>
-							</div>
-						)}
-					</div>
-				)}
+						<IconDownload />
+						{downloadHasDropdown && <IconChevronDown8 />}
+					</button>
+					{downloadHasDropdown && isDownloadMenuOpen && (
+						<div className="download-dropdown-menu" role="menu">
+							<button
+								type="button"
+								onClick={() => handleDownload("translation")}
+							>
+								{l10n.getString("reader-download-translation")}
+							</button>
+							<button
+								type="button"
+								onClick={() => handleDownload("original")}
+							>
+								{l10n.getString("reader-download-original")}
+							</button>
+						</div>
+					)}
+				</div>
 			</div>
 			<div className="end">
 				<CustomSections type="Toolbar" />

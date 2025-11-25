@@ -117,6 +117,7 @@ class PDFView {
 		this._options = options;
 		this._primary = options.primary;
 		this._readOnly = options.readOnly;
+		this._isTranslationView = !!options.isTranslationView;
 		this._preview = options.preview;
 		this._container = options.container;
 		this._password = options.password;
@@ -447,6 +448,8 @@ class PDFView {
 
 		this._resolveInitializedPromise();
 
+		this._detectDocumentLanguage();
+
 		await this._initProcessedData();
 		this._findController.setDocument(this._iframeWindow.PDFViewerApplication.pdfDocument);
 	}
@@ -572,10 +575,12 @@ class PDFView {
 		}
 		this._render();
 		this._updateViewStats();
-		this._detectDocumentLanguage();
 	}
 
 	async _detectDocumentLanguage() {
+		if (this._isTranslationView) {
+			return;
+		}
 		if (this._languageDetectionDone || !this._onDetectDocumentLanguage) {
 			return;
 		}
@@ -803,6 +808,10 @@ class PDFView {
 		this._overlayPopupDelayer.destroy();
 	}
 
+	isTranslationView() {
+		return this._isTranslationView;
+	}
+
 	focus() {
 		this._iframe.focus();
 		// this._iframeWindow.focus();
@@ -867,10 +876,16 @@ class PDFView {
 	}
 
 	setReadOnly(readOnly) {
+		if (this._isTranslationView) {
+			return;
+		}
 		this._readOnly = readOnly;
 	}
 
 	setTool(tool) {
+		if (this._isTranslationView) {
+			return;
+		}
 		if (tool.type === 'hand') {
 			this._iframeWindow.PDFViewerApplication.pdfCursorTools.switchTool(1);
 		}
@@ -883,6 +898,9 @@ class PDFView {
 	}
 
 	setAnnotations(annotations) {
+		if (this._isTranslationView) {
+			return;
+		}
 		let affected = getAffectedAnnotations(this._annotations, annotations, true);
 		let { created, updated, deleted } = affected;
 		this._annotations = annotations;
@@ -929,14 +947,23 @@ class PDFView {
 	}
 
 	setAnnotationPopup(popup) {
+		if (this._isTranslationView) {
+			return;
+		}
 		this._annotationPopup = popup;
 	}
 
 	setSelectionPopup(popup) {
+		if (this._isTranslationView) {
+			return;
+		}
 		this._selectionPopup = popup;
 	}
 
 	setOverlayPopup(popup) {
+		if (this._isTranslationView) {
+			return;
+		}
 		this._overlayPopup = popup;
 		this._overlayPopupDelayer.setOpen(!!popup);
 	}
@@ -1067,10 +1094,16 @@ class PDFView {
 		if (selectionRange && !selectionRange.collapsed) {
 			let rect = this.getClientRectForPopup(selectionRange.position);
 			let annotation = this._getAnnotationFromSelectionRanges(this._selectionRanges, 'highlight');
-			this._onSetSelectionPopup({ rect, annotation });
+			if (!this._isTranslationView) {
+				this._onSetSelectionPopup({ rect, annotation });
+			}
+			setTextLayerSelection(this._iframeWindow, this._selectionRanges);
 		}
 		else {
-			this._onSetSelectionPopup();
+			if (!this._isTranslationView) {
+				this._onSetSelectionPopup();
+			}
+			this._iframeWindow.getSelection().removeAllRanges();
 		}
 	}
 
@@ -1079,7 +1112,9 @@ class PDFView {
 	}
 
 	showAnnotations(show) {
-
+		if (this._isTranslationView) {
+			return;
+		}
 	}
 
 	zoomReset() {
@@ -3488,6 +3523,13 @@ class PDFView {
 		event.preventDefault();
 		event.stopPropagation();
 		if (!event.clipboardData) {
+			return;
+		}
+		if (this._isTranslationView) {
+			let text = getTextFromSelectionRanges(this._selectionRanges);
+			if (text) {
+				event.clipboardData.setData('text/plain', text);
+			}
 			return;
 		}
 		// Copying annotation

@@ -1,49 +1,64 @@
-import React, { createContext } from 'react';
-import { flushSync } from 'react-dom';
-import { createRoot } from 'react-dom/client';
-import EPUBView from '../dom/epub/epub-view';
-import SnapshotView from '../dom/snapshot/snapshot-view';
-import { addFTL, getLocalizedString } from '../fluent';
-import { initPDFPrintService } from '../pdf/pdf-print-service';
-import PDFView from '../pdf/pdf-view';
-import AnnotationManager from './annotation-manager';
-import ReaderUI from './components/reader-ui';
+import React, { createContext } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import EPUBView from "../dom/epub/epub-view";
+import SnapshotView from "../dom/snapshot/snapshot-view";
+import { addFTL, getLocalizedString } from "../fluent";
+import { initPDFPrintService } from "../pdf/pdf-print-service";
+import PDFView from "../pdf/pdf-view";
+import AnnotationManager from "./annotation-manager";
+import ReaderUI from "./components/reader-ui";
 import {
 	createAnnotationContextMenu,
 	createColorContextMenu,
 	createSelectorContextMenu,
 	createThemeContextMenu,
 	createThumbnailContextMenu,
-	createViewContextMenu
-} from './context-menu';
-import { ANNOTATION_COLORS, DEBOUNCE_STATE_CHANGE, DEBOUNCE_STATS_CHANGE, DEFAULT_THEMES } from './defines';
-import { FocusManager } from './focus-manager';
-import { KeyboardManager } from './keyboard-manager';
-import { debounce } from './lib/debounce';
+	createViewContextMenu,
+} from "./context-menu";
+import {
+	ANNOTATION_COLORS,
+	DEBOUNCE_STATE_CHANGE,
+	DEBOUNCE_STATS_CHANGE,
+	DEFAULT_THEMES,
+} from "./defines";
+import { FocusManager } from "./focus-manager";
+import { KeyboardManager } from "./keyboard-manager";
+import { debounce } from "./lib/debounce";
 import {
 	getCurrentColorScheme,
-	getImageDataURL, isMac,
+	getImageDataURL,
+	isMac,
 	setMultiDragPreview,
-} from './lib/utilities';
+} from "./lib/utilities";
 
 // Compute style values for usage in views (CSS variables aren't sufficient for that)
 // Font family is necessary for text annotations
-window.computedFontFamily = window.getComputedStyle(document.body).getPropertyValue('font-family');
-window.computedColorFocusBorder = window.getComputedStyle(document.body).getPropertyValue('--color-focus-border');
-window.computedWidthFocusBorder = window.getComputedStyle(document.body).getPropertyValue('--width-focus-border');
+window.computedFontFamily = window
+	.getComputedStyle(document.body)
+	.getPropertyValue("font-family");
+window.computedColorFocusBorder = window
+	.getComputedStyle(document.body)
+	.getPropertyValue("--color-focus-border");
+window.computedWidthFocusBorder = window
+	.getComputedStyle(document.body)
+	.getPropertyValue("--width-focus-border");
 
 export const ReaderContext = createContext({});
 
 class Reader {
 	constructor(options) {
 		window.rtl = options.rtl;
-		document.getElementsByTagName("html")[0].dir = options.rtl ? 'rtl' : 'ltr';
+		document.getElementsByTagName("html")[0].dir = options.rtl
+			? "rtl"
+			: "ltr";
 
 		this._type = options.type;
 		this._platform = options.platform;
 		this._data = options.data;
 		this._password = options.password;
 		this._preview = options.preview;
+		this._translationBuf = options.translationBuf || null;
 
 		this._readerContext = { type: this._type, platform: this._platform };
 
@@ -65,18 +80,24 @@ class Reader {
 		this._onToolbarShiftTab = options.onToolbarShiftTab;
 		this._onIframeTab = options.onIframeTab;
 		this._onBringReaderToFront = options.onBringReaderToFront;
-		this._onTextSelectionAnnotationModeChange = options.onTextSelectionAnnotationModeChange;
+		this._onTextSelectionAnnotationModeChange =
+			options.onTextSelectionAnnotationModeChange;
 		this._onSaveCustomThemes = options.onSaveCustomThemes;
 		this._onSetLightTheme = options.onSetLightTheme;
 		this._onSetDarkTheme = options.onSetDarkTheme;
 		// Only used on Zotero client, sets text/plain and text/html values from Note Markdown and Note HTML translators
-		this._onSetDataTransferAnnotations = options.onSetDataTransferAnnotations;
+		this._onSetDataTransferAnnotations =
+			options.onSetDataTransferAnnotations;
 		this._onSetZoom = options.onSetZoom;
-		this._translateList = Array.isArray(options.translateList) ? options.translateList : [];
+		this._translateList = Array.isArray(options.translateList)
+			? options.translateList
+			: [];
 		this._onStartTranslation = options.onStartTranslation;
 		this._onStopTranslation = options.onStopTranslation;
 		this._onDownloadTranslation = options.onDownloadTranslation;
 		this._onDownloadOriginal = options.onDownloadOriginal;
+		this._onExposeTranslationReceiver =
+			options.onExposeTranslationReceiver;
 
 		if (Array.isArray(options.ftl)) {
 			for (let ftl of options.ftl) {
@@ -89,11 +110,14 @@ class Reader {
 		this._secondaryView = null;
 		this._lastViewPrimary = true;
 
-		this.initializedPromise = new Promise(resolve => this._resolveInitializedPromise = resolve);
+		this.initializedPromise = new Promise(
+			(resolve) => (this._resolveInitializedPromise = resolve)
+		);
 
-		this._splitViewContainer = document.getElementById('split-view');
-		this._primaryViewContainer = document.getElementById('primary-view');
-		this._secondaryViewContainer = document.getElementById('secondary-view');
+		this._splitViewContainer = document.getElementById("split-view");
+		this._primaryViewContainer = document.getElementById("primary-view");
+		this._secondaryViewContainer =
+			document.getElementById("secondary-view");
 
 		this._enableAnnotationDeletionFromComment = false;
 		this._annotationSelectionTriggeredFromView = false;
@@ -101,88 +125,117 @@ class Reader {
 		// Stores the default or current values for each annotation type
 		this._tools = {
 			pointer: {
-				type: 'pointer'
+				type: "pointer",
 			},
 			hand: {
-				type: 'hand'
+				type: "hand",
 			},
 			highlight: {
-				type: 'highlight',
+				type: "highlight",
 				color: ANNOTATION_COLORS[0][1],
 			},
 			underline: {
-				type: 'underline',
+				type: "underline",
 				color: ANNOTATION_COLORS[0][1],
 			},
 			note: {
-				type: 'note',
+				type: "note",
 				color: ANNOTATION_COLORS[0][1],
 			},
 			image: {
-				type: 'image',
+				type: "image",
 				color: ANNOTATION_COLORS[0][1],
 			},
 			text: {
-				type: 'text',
+				type: "text",
 				color: ANNOTATION_COLORS[0][1],
-				size: 14
+				size: 14,
 			},
 			ink: {
-				type: 'ink',
+				type: "ink",
 				color: ANNOTATION_COLORS[3][1],
-				size: 2
+				size: 2,
 			},
 			eraser: {
-				type: 'eraser',
-				size: 16
-			}
+				type: "eraser",
+				size: 16,
+			},
 		};
 
 		let themes = [...DEFAULT_THEMES, ...(options.customThemes || [])];
-		themes = new Map(themes.map(theme => [theme.id, theme]));
-		let lightTheme = options.lightTheme && themes.get(options.lightTheme) || null;
-		let darkTheme = options.darkTheme === undefined
-			? DEFAULT_THEMES.find(x => x.id === 'dark')
-			: themes.get(options.darkTheme) || null;
+		themes = new Map(themes.map((theme) => [theme.id, theme]));
+		let lightTheme =
+			(options.lightTheme && themes.get(options.lightTheme)) || null;
+		let darkTheme =
+			options.darkTheme === undefined
+				? DEFAULT_THEMES.find((x) => x.id === "dark")
+				: themes.get(options.darkTheme) || null;
 
 		this._state = {
-			splitType: null,
-			splitSize: '50%',
+			splitType:
+				this._translationBuf && this._type === "pdf"
+					? "vertical"
+					: null,
+			splitSize: "50%",
 			primary: true,
 			freeze: false,
-			errorMessage: '',
+			errorMessage: "",
 			annotations: [],
 			selectedAnnotationIDs: [],
 			filter: {
-				query: '',
+				query: "",
 				colors: [],
 				tags: [],
-				authors: []
+				authors: [],
 			},
 			readOnly: options.readOnly !== undefined ? options.readOnly : false,
-			authorName: typeof options.authorName === 'string' ? options.authorName : '',
+			authorName:
+				typeof options.authorName === "string"
+					? options.authorName
+					: "",
 			fontSize: options.fontSize || 1,
 			fontFamily: options.fontFamily,
 			hyphenate: options.hyphenate,
-			showAnnotations: options.showAnnotations !== undefined ? options.showAnnotations : true, // show/hide annotations in views
+			showAnnotations:
+				options.showAnnotations !== undefined
+					? options.showAnnotations
+					: true, // show/hide annotations in views
 			customThemes: options.customThemes || [],
 			lightTheme,
 			darkTheme,
-			autoDisableNoteTool: options.autoDisableNoteTool !== undefined ? options.autoDisableNoteTool : true,
-			autoDisableTextTool: options.autoDisableTextTool !== undefined ? options.autoDisableTextTool : true,
-			autoDisableImageTool: options.autoDisableImageTool !== undefined ? options.autoDisableImageTool : true,
-			textSelectionAnnotationMode: options.textSelectionAnnotationMode || 'highlight',
+			translationActive: !!this._translationBuf,
+			translationLoading: false,
+			autoDisableNoteTool:
+				options.autoDisableNoteTool !== undefined
+					? options.autoDisableNoteTool
+					: true,
+			autoDisableTextTool:
+				options.autoDisableTextTool !== undefined
+					? options.autoDisableTextTool
+					: true,
+			autoDisableImageTool:
+				options.autoDisableImageTool !== undefined
+					? options.autoDisableImageTool
+					: true,
+			textSelectionAnnotationMode:
+				options.textSelectionAnnotationMode || "highlight",
 			colorScheme: options.colorScheme,
-			translationControlsVisible: this._type !== 'pdf',
-			tool: this._tools['pointer'], // Must always be a reference to one of this._tools objects
+			translationControlsVisible: this._type !== "pdf",
+			documentIsEnglish: null,
+			tool: this._tools["pointer"], // Must always be a reference to one of this._tools objects
 			thumbnails: [],
 			outline: null, // null — loading, [] — empty
-			outlineQuery: '',
+			outlineQuery: "",
 			pageLabels: [],
-			sidebarOpen: options.sidebarOpen !== undefined ? options.sidebarOpen : true,
-			sidebarWidth: options.sidebarWidth !== undefined ? options.sidebarWidth : 240,
-			sidebarView: 'annotations',
-			contextPaneOpen: options.contextPaneOpen !== undefined ? options.contextPaneOpen : false,
+			sidebarOpen:
+				options.sidebarOpen !== undefined ? options.sidebarOpen : true,
+			sidebarWidth:
+				options.sidebarWidth !== undefined ? options.sidebarWidth : 240,
+			sidebarView: "annotations",
+			contextPaneOpen:
+				options.contextPaneOpen !== undefined
+					? options.contextPaneOpen
+					: false,
 			bottomPlaceholderHeight: options.bottomPlaceholderHeight || null,
 			toolbarPlaceholderWidth: options.toolbarPlaceholderWidth || 0,
 			showContextPaneToggle: options.showContextPaneToggle,
@@ -202,7 +255,7 @@ class Reader {
 			primaryViewFindState: {
 				popupOpen: false,
 				active: false,
-				query: '',
+				query: "",
 				highlightAll: true,
 				caseSensitive: false,
 				entireWord: false,
@@ -216,11 +269,11 @@ class Reader {
 			secondaryViewFindState: {
 				popupOpen: false,
 				active: false,
-				query: '',
+				query: "",
 				highlightAll: true,
 				caseSensitive: false,
 				entireWord: false,
-				result: null
+				result: null,
 			},
 		};
 
@@ -243,11 +296,11 @@ class Reader {
 			},
 			onIframeTab: () => {
 				this._onIframeTab?.();
-			}
+			},
 		});
 
 		this._keyboardManager = new KeyboardManager({
-			reader: this
+			reader: this,
 		});
 
 		this._annotationManager = new AnnotationManager({
@@ -262,14 +315,16 @@ class Reader {
 			},
 			onChangeFilter: (filter) => {
 				this._updateState({ filter });
-			}
+			},
 		});
 
 		// Select the annotation instead of just navigating when to it when the location is provided externally
 		let selectAnnotationID;
 		if (
-			options.location?.annotationID
-			&& options.annotations.find(x => x.id === options.location.annotationID)
+			options.location?.annotationID &&
+			options.annotations.find(
+				(x) => x.id === options.location.annotationID
+			)
 		) {
 			selectAnnotationID = options.location.annotationID;
 			delete options.location;
@@ -285,23 +340,33 @@ class Reader {
 		}
 
 		if (!this._preview) {
-			createRoot(document.getElementById('reader-ui')).render(
+			createRoot(document.getElementById("reader-ui")).render(
 				<ReaderContext.Provider value={this._readerContext}>
 					<ReaderUI
 						type={this._type}
 						state={this._state}
 						ref={this._readerRef}
 						tools={this._tools}
-						onSelectAnnotations={this.setSelectedAnnotations.bind(this)}
+						onSelectAnnotations={this.setSelectedAnnotations.bind(
+							this
+						)}
 						onZoomIn={this.zoomIn.bind(this)}
 						onZoomOut={this.zoomOut.bind(this)}
 						onZoomReset={this.zoomReset.bind(this)}
 						onNavigateBack={this.navigateBack.bind(this)}
-						onNavigateToPreviousPage={this.navigateToPreviousPage.bind(this)}
-						onNavigateToNextPage={this.navigateToNextPage.bind(this)}
-						onChangePageNumber={pageNumber => this._lastView.navigate({ pageNumber })}
+						onNavigateToPreviousPage={this.navigateToPreviousPage.bind(
+							this
+						)}
+						onNavigateToNextPage={this.navigateToNextPage.bind(
+							this
+						)}
+						onChangePageNumber={(pageNumber) =>
+							this._lastView.navigate({ pageNumber })
+						}
 						onChangeTool={this.setTool.bind(this)}
-						onToggleAppearancePopup={this.toggleAppearancePopup.bind(this)}
+						onToggleAppearancePopup={this.toggleAppearancePopup.bind(
+							this
+						)}
 						onToggleFind={this.toggleFindPopup.bind(this)}
 						onChangeFilter={this.setFilter.bind(this)}
 						onChangeSidebarView={this.setSidebarView.bind(this)}
@@ -314,31 +379,40 @@ class Reader {
 							this._onChangeSidebarWidth(width);
 						}}
 						onChangeTheme={(theme) => {
-							if (getCurrentColorScheme(this._state.colorScheme) === 'dark') {
+							if (
+								getCurrentColorScheme(
+									this._state.colorScheme
+								) === "dark"
+							) {
 								// For Zotero client use prefs to change theme
 								if (this._onSetDarkTheme) {
 									this._onSetDarkTheme(theme);
-								}
-								else {
+								} else {
 									this.setDarkTheme(theme);
 								}
-							}
-							else {
+							} else {
 								if (this._onSetLightTheme) {
 									this._onSetLightTheme(theme);
-								}
-								else {
+								} else {
 									this.setLightTheme(theme);
 								}
 							}
 						}}
 						onResizeSplitView={this.setSplitViewSize.bind(this)}
 						onAddAnnotation={(annotation, select) => {
-							annotation = this._annotationManager.addAnnotation(annotation);
+							annotation =
+								this._annotationManager.addAnnotation(
+									annotation
+								);
 							// Tell screen readers the annotation was added after focus is settled
 							setTimeout(() => {
-								let annotationType = getLocalizedString(`reader-${annotation.type}-annotation`);
-								let msg = getLocalizedString('reader-a11y-annotation-created', { type: annotationType });
+								let annotationType = getLocalizedString(
+									`reader-${annotation.type}-annotation`
+								);
+								let msg = getLocalizedString(
+									"reader-a11y-annotation-created",
+									{ type: annotationType }
+								);
 								this.setA11yMessage(msg);
 							}, 100);
 							if (select) {
@@ -348,64 +422,122 @@ class Reader {
 							}
 						}}
 						onUpdateAnnotations={(annotations) => {
-							this._annotationManager.updateAnnotations(annotations);
+							this._annotationManager.updateAnnotations(
+								annotations
+							);
 							this._enableAnnotationDeletionFromComment = false;
 						}}
-						onDeleteAnnotations={this._annotationManager.deleteAnnotations.bind(this._annotationManager)}
+						onDeleteAnnotations={this._annotationManager.deleteAnnotations.bind(
+							this._annotationManager
+						)}
 						onOpenTagsPopup={this._onOpenTagsPopup}
-						onOpenPageLabelPopup={this._handleOpenPageLabelPopup.bind(this)}
-						onOpenColorContextMenu={params => this._onOpenContextMenu(createColorContextMenu(this, params))}
-						onOpenAnnotationContextMenu={params => this._onOpenContextMenu(createAnnotationContextMenu(this, params))}
-						onOpenSelectorContextMenu={params => this._onOpenContextMenu(createSelectorContextMenu(this, params))}
-						onOpenThumbnailContextMenu={params => this._onOpenContextMenu(createThumbnailContextMenu(this, params))}
+						onOpenPageLabelPopup={this._handleOpenPageLabelPopup.bind(
+							this
+						)}
+						onOpenColorContextMenu={(params) =>
+							this._onOpenContextMenu(
+								createColorContextMenu(this, params)
+							)
+						}
+						onOpenAnnotationContextMenu={(params) =>
+							this._onOpenContextMenu(
+								createAnnotationContextMenu(this, params)
+							)
+						}
+						onOpenSelectorContextMenu={(params) =>
+							this._onOpenContextMenu(
+								createSelectorContextMenu(this, params)
+							)
+						}
+						onOpenThumbnailContextMenu={(params) =>
+							this._onOpenContextMenu(
+								createThumbnailContextMenu(this, params)
+							)
+						}
 						onCloseContextMenu={this.closeContextMenu.bind(this)}
-						onCloseLabelPopup={this._handleLabelPopupClose.bind(this)}
+						onCloseLabelPopup={this._handleLabelPopupClose.bind(
+							this
+						)}
 						onEnterPassword={this.enterPassword.bind(this)}
 						onAddToNote={(annotations) => {
 							this._onAddToNote(annotations);
 							this.setSelectedAnnotations([]);
 						}}
 						onNavigate={this.navigate.bind(this)}
-						onUpdateOutline={outline => this._updateState({ outline })}
-						onUpdateOutlineQuery={outlineQuery => this._updateState({ outlineQuery })}
-						onRenderThumbnails={(pageIndexes) => this._primaryView._pdfThumbnails.render(pageIndexes)}
-						onSetDataTransferAnnotations={this._handleSetDataTransferAnnotations.bind(this)}
+						onUpdateOutline={(outline) =>
+							this._updateState({ outline })
+						}
+						onUpdateOutlineQuery={(outlineQuery) =>
+							this._updateState({ outlineQuery })
+						}
+						onRenderThumbnails={(pageIndexes) =>
+							this._primaryView._pdfThumbnails.render(pageIndexes)
+						}
+						onSetDataTransferAnnotations={this._handleSetDataTransferAnnotations.bind(
+							this
+						)}
 						onOpenLink={this._onOpenLink}
-						onChangeAppearance={this._handleAppearanceChange.bind(this)}
-						onChangeFocusModeEnabled={this._handleFocusModeEnabledChange.bind(this)}
-						onChangeFindState={this._handleFindStateChange.bind(this)}
+						onChangeAppearance={this._handleAppearanceChange.bind(
+							this
+						)}
+						onChangeFocusModeEnabled={this._handleFocusModeEnabledChange.bind(
+							this
+						)}
+						onChangeFindState={this._handleFindStateChange.bind(
+							this
+						)}
 						onFindNext={this.findNext.bind(this)}
 						onFindPrevious={this.findPrevious.bind(this)}
 						onToggleContextPane={this._onToggleContextPane}
 						translateList={this._translateList}
-						showTranslationControls={this._state.translationControlsVisible}
-						onStartTranslation={this._onStartTranslation}
-						onStopTranslation={this._onStopTranslation}
+						showTranslationControls={
+							this._state.translationControlsVisible
+						}
+						onStartTranslation={this._handleStartTranslation.bind(
+							this
+						)}
+						onStopTranslation={this._handleStopTranslation.bind(
+							this
+						)}
 						onDownloadTranslation={this._onDownloadTranslation}
 						onDownloadOriginal={this._onDownloadOriginal}
-						onChangeTextSelectionAnnotationMode={this.setTextSelectionAnnotationMode.bind(this)}
-						onCloseOverlayPopup={this._handleOverlayPopupClose.bind(this)}
+						translationActive={this._state.translationActive}
+						onChangeTextSelectionAnnotationMode={this.setTextSelectionAnnotationMode.bind(
+							this
+						)}
+						onCloseOverlayPopup={this._handleOverlayPopupClose.bind(
+							this
+						)}
 						onChangeSplitType={(type) => {
-							if (type === 'horizontal') {
+							if (type === "horizontal") {
 								this.toggleHorizontalSplit(true);
-							}
-							else if (type === 'vertical') {
+							} else if (type === "vertical") {
 								this.toggleVerticalSplit(true);
-							}
-							else {
+							} else {
 								this.disableSplitView();
 							}
 						}}
-						onChangeScrollMode={(mode) => this.scrollMode = mode}
-						onChangeSpreadMode={(mode) => this.spreadMode = mode}
-						onChangeFlowMode={(mode) => this.flowMode = mode}
+						onChangeScrollMode={(mode) => (this.scrollMode = mode)}
+						onChangeSpreadMode={(mode) => (this.spreadMode = mode)}
+						onChangeFlowMode={(mode) => (this.flowMode = mode)}
 						onAddTheme={() => this._updateState({ themePopup: {} })}
-						onOpenThemeContextMenu={params => this._onOpenContextMenu(createThemeContextMenu(this, params))}
-						onCloseThemePopup={() => this._updateState({ themePopup: null })}
+						onOpenThemeContextMenu={(params) =>
+							this._onOpenContextMenu(
+								createThemeContextMenu(this, params)
+							)
+						}
+						onCloseThemePopup={() =>
+							this._updateState({ themePopup: null })
+						}
 						onSaveCustomThemes={(customThemes) => {
 							this._onSaveCustomThemes(customThemes);
-							let themes = [...DEFAULT_THEMES, ...(customThemes || [])];
-							let map = new Map(themes.map(theme => [theme.id, theme]));
+							let themes = [
+								...DEFAULT_THEMES,
+								...(customThemes || []),
+							];
+							let map = new Map(
+								themes.map((theme) => [theme.id, theme])
+							);
 							let { lightTheme, darkTheme } = this._state;
 							if (lightTheme && !map.has(lightTheme.id)) {
 								lightTheme = null;
@@ -413,7 +545,12 @@ class Reader {
 							if (darkTheme && !map.has(darkTheme.id)) {
 								darkTheme = null;
 							}
-							this._updateState({ themePopup: null, customThemes, lightTheme, darkTheme });
+							this._updateState({
+								themePopup: null,
+								customThemes,
+								lightTheme,
+								darkTheme,
+							});
 						}}
 					/>
 				</ReaderContext.Provider>
@@ -422,15 +559,23 @@ class Reader {
 
 		this._updateState(this._state, true);
 
+		this._onExposeTranslationReceiver?.({
+			setTranslation: (buf) => this.setTranslationBuf(buf),
+			closeTranslation: () => this.closeTranslation(),
+		});
+
 		// window.addEventListener("wheel", event => {
 		// 	const delta = Math.sign(event.deltaY);
 		// 	console.info(event.target, delta);
 		// 	event.preventDefault();
 		// }, { passive: false });
 
-		if (this._platform !== 'web') {
-			window.addEventListener('contextmenu', (event) => {
-				if (event.target.nodeName !== 'INPUT' && !event.target.hasAttribute('contenteditable')) {
+		if (this._platform !== "web") {
+			window.addEventListener("contextmenu", (event) => {
+				if (
+					event.target.nodeName !== "INPUT" &&
+					!event.target.hasAttribute("contenteditable")
+				) {
 					event.preventDefault();
 				}
 			});
@@ -439,7 +584,9 @@ class Reader {
 
 	_ensureType() {
 		if (!Array.from(arguments).includes(this._type)) {
-			throw new Error(`The operation is not supported for '${this._type}'`);
+			throw new Error(
+				`The operation is not supported for '${this._type}'`
+			);
 		}
 	}
 
@@ -454,24 +601,41 @@ class Reader {
 		this._readerRef.current?.setState(this._state);
 
 		if (this._state.annotations !== previousState.annotations) {
-			let annotations = this._state.annotations.filter(x => !x._hidden);
+			let annotations = this._state.annotations.filter((x) => !x._hidden);
 			this._primaryView?.setAnnotations(annotations);
-			this._secondaryView?.setAnnotations(annotations);
+			if (!this._isTranslationView(this._secondaryView)) {
+				this._secondaryView?.setAnnotations(annotations);
+			}
 		}
 
-		if (this._state.selectedAnnotationIDs !== previousState.selectedAnnotationIDs) {
-			this._primaryView?.setSelectedAnnotationIDs(this._state.selectedAnnotationIDs);
-			this._secondaryView?.setSelectedAnnotationIDs(this._state.selectedAnnotationIDs);
+		if (
+			this._state.selectedAnnotationIDs !==
+			previousState.selectedAnnotationIDs
+		) {
+			this._primaryView?.setSelectedAnnotationIDs(
+				this._state.selectedAnnotationIDs
+			);
+			if (!this._isTranslationView(this._secondaryView)) {
+				this._secondaryView?.setSelectedAnnotationIDs(
+					this._state.selectedAnnotationIDs
+				);
+			}
 		}
 
 		if (this._state.tool !== previousState.tool) {
 			this._primaryView?.setTool(this._state.tool);
-			this._secondaryView?.setTool(this._state.tool);
+			if (!this._isTranslationView(this._secondaryView)) {
+				this._secondaryView?.setTool(this._state.tool);
+			}
 		}
 
 		if (this._state.showAnnotations !== previousState.showAnnotations) {
 			this._primaryView?.setShowAnnotations(this._state.showAnnotations);
-			this._secondaryView?.setShowAnnotations(this._state.showAnnotations);
+			if (!this._isTranslationView(this._secondaryView)) {
+				this._secondaryView?.setShowAnnotations(
+					this._state.showAnnotations
+				);
+			}
 		}
 
 		if (this._state.outline !== previousState.outline) {
@@ -495,9 +659,9 @@ class Reader {
 
 		if (init || this._state.colorScheme !== previousState.colorScheme) {
 			if (this._state.colorScheme) {
-				document.documentElement.dataset.colorScheme = this._state.colorScheme;
-			}
-			else {
+				document.documentElement.dataset.colorScheme =
+					this._state.colorScheme;
+			} else {
 				delete document.documentElement.dataset.colorScheme;
 			}
 			if (!init) {
@@ -517,35 +681,73 @@ class Reader {
 			this._secondaryView?.setPageLabels(this._state.pageLabels);
 		}
 
-		if (this._state.primaryViewAnnotationPopup !== previousState.primaryViewAnnotationPopup) {
-			this._primaryView?.setAnnotationPopup(this._state.primaryViewAnnotationPopup);
+		if (
+			this._state.primaryViewAnnotationPopup !==
+			previousState.primaryViewAnnotationPopup
+		) {
+			this._primaryView?.setAnnotationPopup(
+				this._state.primaryViewAnnotationPopup
+			);
 		}
-		if (this._state.secondaryViewAnnotationPopup !== previousState.secondaryViewAnnotationPopup) {
-			this._secondaryView?.setAnnotationPopup(this._state.secondaryViewAnnotationPopup);
-		}
-
-		if (this._state.primaryViewSelectionPopup !== previousState.primaryViewSelectionPopup) {
-			this._primaryView?.setSelectionPopup(this._state.primaryViewSelectionPopup);
-		}
-		if (this._state.secondaryViewSelectionPopup !== previousState.secondaryViewSelectionPopup) {
-			this._secondaryView?.setSelectionPopup(this._state.secondaryViewSelectionPopup);
-		}
-
-		if (this._state.primaryViewOverlayPopup !== previousState.primaryViewOverlayPopup) {
-			this._primaryView?.setOverlayPopup(this._state.primaryViewOverlayPopup);
-		}
-		if (this._state.secondaryViewOverlayPopup !== previousState.secondaryViewOverlayPopup) {
-			this._secondaryView?.setOverlayPopup(this._state.secondaryViewOverlayPopup);
+		if (
+			this._state.secondaryViewAnnotationPopup !==
+			previousState.secondaryViewAnnotationPopup
+		) {
+			this._secondaryView?.setAnnotationPopup(
+				this._state.secondaryViewAnnotationPopup
+			);
 		}
 
-		if (this._state.primaryViewFindState !== previousState.primaryViewFindState) {
+		if (
+			this._state.primaryViewSelectionPopup !==
+			previousState.primaryViewSelectionPopup
+		) {
+			this._primaryView?.setSelectionPopup(
+				this._state.primaryViewSelectionPopup
+			);
+		}
+		if (
+			this._state.secondaryViewSelectionPopup !==
+			previousState.secondaryViewSelectionPopup
+		) {
+			this._secondaryView?.setSelectionPopup(
+				this._state.secondaryViewSelectionPopup
+			);
+		}
+
+		if (
+			this._state.primaryViewOverlayPopup !==
+			previousState.primaryViewOverlayPopup
+		) {
+			this._primaryView?.setOverlayPopup(
+				this._state.primaryViewOverlayPopup
+			);
+		}
+		if (
+			this._state.secondaryViewOverlayPopup !==
+			previousState.secondaryViewOverlayPopup
+		) {
+			this._secondaryView?.setOverlayPopup(
+				this._state.secondaryViewOverlayPopup
+			);
+		}
+
+		if (
+			this._state.primaryViewFindState !==
+			previousState.primaryViewFindState
+		) {
 			this._primaryView?.setFindState(this._state.primaryViewFindState);
 		}
-		if (this._state.secondaryViewFindState !== previousState.secondaryViewFindState) {
-			this._secondaryView?.setFindState(this._state.secondaryViewFindState);
+		if (
+			this._state.secondaryViewFindState !==
+			previousState.secondaryViewFindState
+		) {
+			this._secondaryView?.setFindState(
+				this._state.secondaryViewFindState
+			);
 		}
 
-		if (this._type === 'epub' || this._type === 'snapshot') {
+		if (this._type === "epub" || this._type === "snapshot") {
 			if (this._state.fontFamily !== previousState.fontFamily) {
 				this._primaryView?.setFontFamily(this._state.fontFamily);
 				this._secondaryView?.setFontFamily(this._state.fontFamily);
@@ -563,26 +765,34 @@ class Reader {
 		}
 
 		if (init || this._state.sidebarOpen !== previousState.sidebarOpen) {
-			document.body.classList.toggle('sidebar-open', this._state.sidebarOpen);
+			document.body.classList.toggle(
+				"sidebar-open",
+				this._state.sidebarOpen
+			);
 			this._primaryView?.setSidebarOpen(this._state.sidebarOpen);
 			this._secondaryView?.setSidebarOpen(this._state.sidebarOpen);
 		}
 
 		if (init || this._state.splitType !== previousState.splitType) {
-			document.body.classList.remove('enable-horizontal-split-view');
-			document.body.classList.remove('enable-vertical-split-view');
+			document.body.classList.remove("enable-horizontal-split-view");
+			document.body.classList.remove("enable-vertical-split-view");
 			// Split
 			if ((!previousState.splitType || init) && this._state.splitType) {
 				document.body.classList.add(
-					this._state.splitType === 'vertical'
-						? 'enable-vertical-split-view'
-						: 'enable-horizontal-split-view'
+					this._state.splitType === "vertical"
+						? "enable-vertical-split-view"
+						: "enable-horizontal-split-view"
 				);
-				this._updateState({ secondaryViewState: { ...this._state.primaryViewState } });
+				this._updateState({
+					secondaryViewState: { ...this._state.primaryViewState },
+				});
 				this._secondaryView = this._createView(false);
 			}
 			// Unsplit
-			else if ((previousState.splitType || init) && !this._state.splitType) {
+			else if (
+				(previousState.splitType || init) &&
+				!this._state.splitType
+			) {
 				this._secondaryView?.destroy();
 				this._secondaryView = null;
 				this._secondaryViewContainer.replaceChildren();
@@ -592,42 +802,61 @@ class Reader {
 			// Change existing split type
 			else {
 				document.body.classList.add(
-					this._state.splitType === 'vertical'
-						? 'enable-vertical-split-view'
-						: 'enable-horizontal-split-view'
+					this._state.splitType === "vertical"
+						? "enable-vertical-split-view"
+						: "enable-horizontal-split-view"
 				);
 			}
 		}
 
 		if (init || this._state.splitSize !== previousState.splitSize) {
-			document.documentElement.style.setProperty('--split-view-size', this._state.splitSize);
+			document.documentElement.style.setProperty(
+				"--split-view-size",
+				this._state.splitSize
+			);
 		}
 
 		if (init || this._state.sidebarWidth !== previousState.sidebarWidth) {
-			document.documentElement.style.setProperty('--sidebar-width', this._state.sidebarWidth + 'px');
+			document.documentElement.style.setProperty(
+				"--sidebar-width",
+				this._state.sidebarWidth + "px"
+			);
 		}
 
-		if (init || this._state.bottomPlaceholderHeight !== previousState.bottomPlaceholderHeight) {
+		if (
+			init ||
+			this._state.bottomPlaceholderHeight !==
+				previousState.bottomPlaceholderHeight
+		) {
 			let root = document.documentElement;
-			root.style.setProperty('--bottom-placeholder-height', (this._state.bottomPlaceholderHeight || 0) + 'px');
+			root.style.setProperty(
+				"--bottom-placeholder-height",
+				(this._state.bottomPlaceholderHeight || 0) + "px"
+			);
 		}
 
-		if (init || this._state.toolbarPlaceholderWidth !== previousState.toolbarPlaceholderWidth) {
+		if (
+			init ||
+			this._state.toolbarPlaceholderWidth !==
+				previousState.toolbarPlaceholderWidth
+		) {
 			let root = document.documentElement;
-			root.style.setProperty('--toolbar-placeholder-width', this._state.toolbarPlaceholderWidth + 'px');
+			root.style.setProperty(
+				"--toolbar-placeholder-width",
+				this._state.toolbarPlaceholderWidth + "px"
+			);
 		}
 
 		if (init || this._state.fontSize !== previousState.fontSize) {
 			let root = document.documentElement;
-			root.style.fontSize = this._state.fontSize + 'em';
+			root.style.fontSize = this._state.fontSize + "em";
 		}
 
 		if (init || this._state.freeze !== previousState.freeze) {
 			if (this._state.freeze) {
-				document.body.classList.add('freeze');
-			}
-			else {
-				document.body.classList.remove('freeze');
+				document.body.classList.add("freeze");
+			} else {
+				document.body.classList.remove("freeze");
 			}
 		}
 	}
@@ -638,24 +867,25 @@ class Reader {
 
 	toggleHorizontalSplit(enable) {
 		if (enable === undefined) {
-			enable = !this._state.splitType || this._state.splitType !== 'horizontal';
+			enable =
+				!this._state.splitType ||
+				this._state.splitType !== "horizontal";
 		}
 		if (enable) {
-			this._updateState({ splitType: 'horizontal' });
-		}
-		else {
+			this._updateState({ splitType: "horizontal" });
+		} else {
 			this.disableSplitView();
 		}
 	}
 
 	toggleVerticalSplit(enable) {
 		if (enable === undefined) {
-			enable = !this._state.splitType || this._state.splitType !== 'vertical';
+			enable =
+				!this._state.splitType || this._state.splitType !== "vertical";
 		}
 		if (enable) {
-			this._updateState({ splitType: 'vertical' });
-		}
-		else {
+			this._updateState({ splitType: "vertical" });
+		} else {
 			this.disableSplitView();
 		}
 	}
@@ -665,7 +895,10 @@ class Reader {
 	}
 
 	setTool(params) {
-		if (this._state.readOnly && !['pointer', 'hand'].includes(params.type)) {
+		if (
+			this._state.readOnly &&
+			!["pointer", "hand"].includes(params.type)
+		) {
 			return;
 		}
 		let tool = this._state.tool;
@@ -676,7 +909,7 @@ class Reader {
 			tool[key] = params[key];
 		}
 		this._updateState({ tool });
-		if (!['pointer', 'hand'].includes(tool.type)) {
+		if (!["pointer", "hand"].includes(tool.type)) {
 			this.setSelectedAnnotations([]);
 		}
 	}
@@ -685,8 +918,7 @@ class Reader {
 		let tool = this._state.tool;
 		if (tool.type === type) {
 			this._updateState({ tool: this._tools.pointer });
-		}
-		else {
+		} else {
 			this._updateState({ tool: this._tools[type] });
 		}
 		this.setSelectedAnnotations([]);
@@ -718,17 +950,17 @@ class Reader {
 
 	setReadOnly(readOnly) {
 		// Also unset any active tool
-		this._updateState({ readOnly, tool: this._tools['pointer'] });
+		this._updateState({ readOnly, tool: this._tools["pointer"] });
 	}
 
 	toggleHandTool(enable) {
 		if (enable === undefined) {
-			enable = this._state.tool.type !== 'hand';
+			enable = this._state.tool.type !== "hand";
 		}
 		if (enable) {
-			this.setTool({ type: 'hand' });
+			this.setTool({ type: "hand" });
 		} else {
-			this.setTool({ type: 'pointer' });
+			this.setTool({ type: "pointer" });
 		}
 	}
 
@@ -761,24 +993,27 @@ class Reader {
 		this._updateState({ contextMenu: null });
 		this._focusManager.restoreFocus();
 		this._onBringReaderToFront?.(false);
-		document.querySelectorAll('.context-menu-open').forEach(x => x.classList.remove('context-menu-open'));
+		document
+			.querySelectorAll(".context-menu-open")
+			.forEach((x) => x.classList.remove("context-menu-open"));
 	}
 
 	_handleAppearanceChange(params) {
-		this._ensureType('epub', 'snapshot');
+		this._ensureType("epub", "snapshot");
 		this._primaryView?.setAppearance(params);
 		this._secondaryView?.setAppearance(params);
 	}
 
 	_handleFocusModeEnabledChange(enabled) {
-		this._ensureType('snapshot');
+		this._ensureType("snapshot");
 		try {
 			this._primaryView?.setFocusModeEnabled(enabled);
 			this._secondaryView?.setFocusModeEnabled(enabled);
-		}
-		catch (e) {
+		} catch (e) {
 			console.error(e);
-			this.setErrorMessage(this._getString('reader-focus-mode-not-supported'));
+			this.setErrorMessage(
+				this._getString("reader-focus-mode-not-supported")
+			);
 			setTimeout(() => {
 				this.setErrorMessage(null);
 			}, 5000);
@@ -786,11 +1021,17 @@ class Reader {
 	}
 
 	_handleFindStateChange(primary, params) {
-		this._updateState({ [primary ? 'primaryViewFindState' : 'secondaryViewFindState']: params });
+		this._updateState({
+			[primary ? "primaryViewFindState" : "secondaryViewFindState"]:
+				params,
+		});
 	}
 
 	_handleOverlayPopupClose(primary) {
-		this._updateState({ [primary ? 'primaryViewOverlayPopup' : 'secondaryViewOverlayPopup']: null });
+		this._updateState({
+			[primary ? "primaryViewOverlayPopup" : "secondaryViewOverlayPopup"]:
+				null,
+		});
 	}
 
 	_handleDocumentLanguageDetected(info) {
@@ -800,20 +1041,82 @@ class Reader {
 		let translationControlsVisible = info.isEnglish !== false;
 		let nextState = {};
 		let changed = false;
-		if (this._state.translationControlsVisible !== translationControlsVisible) {
+		if (
+			this._state.translationControlsVisible !==
+			translationControlsVisible
+		) {
 			nextState.translationControlsVisible = translationControlsVisible;
 			changed = true;
 		}
-		console.log('changed', changed);
-		console.log('nextState', nextState);
+		if (this._state.documentIsEnglish !== info.isEnglish) {
+			nextState.documentIsEnglish = info.isEnglish;
+			changed = true;
+		}
+		console.log("changed", changed);
+		console.log("nextState", nextState);
 		if (changed) {
 			this._updateState(nextState);
 		}
 	}
 
+	setTranslationBuf(buf) {
+		this._translationBuf = buf || null;
+		let active = !!buf;
+		let previousSplitType = this._state.splitType;
+		let update = { translationActive: active, translationLoading: false };
+		if (
+			active &&
+			this._type === "pdf" &&
+			this._state.splitType !== "vertical"
+		) {
+			update.splitType = "vertical";
+		}
+		if (!active && this._state.splitType) {
+			update.splitType = null;
+		}
+		this._updateState(update);
+
+		// If we already had a translation view open, rebuild it with the new buffer
+		if (
+			active &&
+			this._state.splitType === "vertical" &&
+			previousSplitType === "vertical" &&
+			this._secondaryView
+		) {
+			this._secondaryView.destroy();
+			this._secondaryView = null;
+			this._secondaryViewContainer.replaceChildren();
+			this._secondaryView = this._createView(false);
+		}
+	}
+
+	closeTranslation() {
+		this.setTranslationBuf(null);
+	}
+
+	_handleStartTranslation(service, meta) {
+		if (!this._onStartTranslation) {
+			return;
+		}
+		this._updateState({ translationLoading: true });
+		try {
+			this._onStartTranslation(service, meta);
+		} catch (error) {
+			this._updateState({ translationLoading: false });
+			throw error;
+		}
+	}
+
+	_handleStopTranslation(service) {
+		this.closeTranslation();
+		this._onStopTranslation?.(service);
+	}
+
 	setTextSelectionAnnotationMode(mode) {
-		if (!['highlight', 'underline'].includes(mode)) {
-			throw new Error(`Invalid 'textSelectionAnnotationMode' value '${mode}'`);
+		if (!["highlight", "underline"].includes(mode)) {
+			throw new Error(
+				`Invalid 'textSelectionAnnotationMode' value '${mode}'`
+			);
 		}
 		this._updateState({ textSelectionAnnotationMode: mode });
 		this._onTextSelectionAnnotationModeChange(mode);
@@ -824,15 +1127,24 @@ class Reader {
 	// so debounce is used to fire only after the last update.
 	a11yAnnounceSearchMessage = debounce((findStateResult) => {
 		if (!findStateResult) return;
-		let { index, total, currentPageLabel, currentSnippet } = findStateResult;
+		let { index, total, currentPageLabel, currentSnippet } =
+			findStateResult;
 		if (total == 0) {
-			this.setA11yMessage(this._getString('reader-phrase-not-found'));
+			this.setA11yMessage(this._getString("reader-phrase-not-found"));
 			return;
 		}
-		let searchIndex = `${this._getString('reader-search-result-index')}: ${index + 1}.`;
-		let totalResults = `${this._getString('reader-search-result-total')}: ${total}.`;
-		let page = currentPageLabel ? `${this._getString('reader-page')}: ${currentPageLabel}.` : '';
-		this.setA11yMessage(`${searchIndex} ${totalResults} ${page} ${currentSnippet || ''}`);
+		let searchIndex = `${this._getString("reader-search-result-index")}: ${
+			index + 1
+		}.`;
+		let totalResults = `${this._getString(
+			"reader-search-result-total"
+		)}: ${total}.`;
+		let page = currentPageLabel
+			? `${this._getString("reader-page")}: ${currentPageLabel}.`
+			: "";
+		this.setA11yMessage(
+			`${searchIndex} ${totalResults} ${page} ${currentSnippet || ""}`
+		);
 	}, 100);
 
 	findNext(primary) {
@@ -850,7 +1162,7 @@ class Reader {
 	}
 
 	toggleAppearancePopup(open) {
-		let key = 'appearancePopup';
+		let key = "appearancePopup";
 		if (open === undefined) {
 			open = !this._state[key];
 		}
@@ -864,7 +1176,7 @@ class Reader {
 		if (primary === undefined) {
 			primary = this._lastViewPrimary;
 		}
-		let key = primary ? 'primaryViewFindState' : 'secondaryViewFindState';
+		let key = primary ? "primaryViewFindState" : "secondaryViewFindState";
 		let prevFindState = this._state[key];
 		if (open === undefined) {
 			open = !prevFindState.popupOpen;
@@ -877,7 +1189,9 @@ class Reader {
 		this._updateState({ [key]: findState });
 		if (open) {
 			setTimeout(() => {
-				let selector = (primary ? '.primary-view' : '.secondary-view') + ' .find-popup input';
+				let selector =
+					(primary ? ".primary-view" : ".secondary-view") +
+					" .find-popup input";
 				document.querySelector(selector)?.select();
 				document.querySelector(selector)?.focus();
 			}, 100);
@@ -896,10 +1210,21 @@ class Reader {
 		return getLocalizedString(name, args);
 	}
 
+	_isTranslationView(view) {
+		return !!view?.isTranslationView?.();
+	}
+
 	_createView(primary, location) {
 		let view;
 
-		let container = primary ? this._primaryViewContainer : this._secondaryViewContainer;
+		let container = primary
+			? this._primaryViewContainer
+			: this._secondaryViewContainer;
+		let isTranslationView =
+			!primary &&
+			this._type === "pdf" &&
+			this._state.translationActive &&
+			!!this._translationBuf;
 
 		let onSetThumbnails = (thumbnails) => {
 			this._updateState({ thumbnails });
@@ -914,7 +1239,9 @@ class Reader {
 		};
 
 		let onChangeViewState = debounce((state) => {
-			this._updateState({ [primary ? 'primaryViewState' : 'secondaryViewState']: state });
+			this._updateState({
+				[primary ? "primaryViewState" : "secondaryViewState"]: state,
+			});
 			if (!primary) {
 				let { splitType, splitSize } = this._state;
 				state = { ...state, splitType, splitSize };
@@ -923,26 +1250,35 @@ class Reader {
 		}, DEBOUNCE_STATE_CHANGE);
 
 		let onChangeViewStats = debounce((state) => {
-			this._updateState({ [primary ? 'primaryViewStats' : 'secondaryViewStats']: state });
+			this._updateState({
+				[primary ? "primaryViewStats" : "secondaryViewStats"]: state,
+			});
 		}, DEBOUNCE_STATS_CHANGE);
 
 		let onAddAnnotation = (annotation, select) => {
 			annotation = this._annotationManager.addAnnotation(annotation);
 			// Tell screen readers the annotation was added after focus is settled
 			setTimeout(() => {
-				let annotationType = getLocalizedString(`reader-${annotation.type}-annotation`);
-				let msg = getLocalizedString('reader-a11y-annotation-created', { type: annotationType });
+				let annotationType = getLocalizedString(
+					`reader-${annotation.type}-annotation`
+				);
+				let msg = getLocalizedString("reader-a11y-annotation-created", {
+					type: annotationType,
+				});
 				this.setA11yMessage(msg);
 			}, 100);
 			if (select) {
 				this.setSelectedAnnotations([annotation.id], true);
 			}
 			if (
-				annotation.type === 'note' && this._state.autoDisableNoteTool
-				|| annotation.type === 'text' && this._state.autoDisableTextTool
-				|| annotation.type === 'image' && this._state.autoDisableImageTool
+				(annotation.type === "note" &&
+					this._state.autoDisableNoteTool) ||
+				(annotation.type === "text" &&
+					this._state.autoDisableTextTool) ||
+				(annotation.type === "image" &&
+					this._state.autoDisableImageTool)
 			) {
-				this.setTool({ type: 'pointer' });
+				this.setTool({ type: "pointer" });
 			}
 			return annotation;
 		};
@@ -977,23 +1313,46 @@ class Reader {
 
 		let onOpenViewContextMenu = (params) => {
 			// Trigger view context menu after focus even fires and focuses the current view
-			setTimeout(() => this._onOpenContextMenu(createViewContextMenu(this, params)));
+			setTimeout(() =>
+				this._onOpenContextMenu(createViewContextMenu(this, params))
+			);
 		};
 
 		let onSetSelectionPopup = (selectionPopup) => {
-			this._updateState({ [primary ? 'primaryViewSelectionPopup' : 'secondaryViewSelectionPopup']: selectionPopup });
+			if (primary || !isTranslationView) {
+				this._updateState({
+					[primary
+						? "primaryViewSelectionPopup"
+						: "secondaryViewSelectionPopup"]: selectionPopup,
+				});
+			}
 		};
 
 		let onSetAnnotationPopup = (annotationPopup) => {
-			this._updateState({ [primary ? 'primaryViewAnnotationPopup' : 'secondaryViewAnnotationPopup']: annotationPopup });
+			if (primary || !isTranslationView) {
+				this._updateState({
+					[primary
+						? "primaryViewAnnotationPopup"
+						: "secondaryViewAnnotationPopup"]: annotationPopup,
+				});
+			}
 		};
 
 		let onSetOverlayPopup = (overlayPopup) => {
-			this._updateState({ [primary ? 'primaryViewOverlayPopup' : 'secondaryViewOverlayPopup']: overlayPopup });
+			if (primary || !isTranslationView) {
+				this._updateState({
+					[primary
+						? "primaryViewOverlayPopup"
+						: "secondaryViewOverlayPopup"]: overlayPopup,
+				});
+			}
 		};
 
 		let onSetFindState = (params) => {
-			this._updateState({ [primary ? 'primaryViewFindState' : 'secondaryViewFindState']: params });
+			this._updateState({
+				[primary ? "primaryViewFindState" : "secondaryViewFindState"]:
+					params,
+			});
 			this.a11yAnnounceSearchMessage(params.result);
 		};
 
@@ -1013,29 +1372,37 @@ class Reader {
 			this._keyboardManager.handleViewKeyUp(event);
 		};
 
-		let onSetZoom = this._onSetZoom && ((iframe, zoom) => {
-			this._onSetZoom(iframe, zoom);
-		});
+		let onSetZoom =
+			this._onSetZoom &&
+			((iframe, zoom) => {
+				this._onSetZoom(iframe, zoom);
+			});
 
 		let onEPUBEncrypted = () => {
-			this.setErrorMessage(this._getString('reader-epub-encrypted'));
+			this.setErrorMessage(this._getString("reader-epub-encrypted"));
 		};
 
 		let onFocusAnnotation = (annotation) => {
 			if (!annotation) return;
 			// Announce the link url
-			if (annotation.type == 'external-link') {
+			if (annotation.type == "external-link") {
 				this.setA11yMessage(annotation.url);
 				return;
 			}
 			// Announce the content of a focused citation
-			if (annotation.type == 'citation') {
-				this.setA11yMessage(`${annotation.references.map(r => r.text).join('')}`);
+			if (annotation.type == "citation") {
+				this.setA11yMessage(
+					`${annotation.references.map((r) => r.text).join("")}`
+				);
 				return;
 			}
 			// Announce the type and content of annotations added by the user
-			let annotationType = this._getString(`reader-${annotation.type}-annotation`);
-			let annotationContent = `${annotationType}. ${annotation.text || annotation.comment}`;
+			let annotationType = this._getString(
+				`reader-${annotation.type}-annotation`
+			);
+			let annotationContent = `${annotationType}. ${
+				annotation.text || annotation.comment
+			}`;
 			this.setA11yMessage(annotationContent);
 		};
 
@@ -1044,13 +1411,13 @@ class Reader {
 		};
 
 		let data;
-		if (this._type === 'pdf') {
-			data = this._data;
-		}
-		else if (this._primaryView) {
+		if (this._type === "pdf") {
+			data = isTranslationView
+				? { buf: this._translationBuf }
+				: this._data;
+		} else if (this._primaryView) {
 			data = this._primaryView.getData();
-		}
-		else {
+		} else {
 			data = this._data;
 			delete this._data;
 		}
@@ -1060,23 +1427,36 @@ class Reader {
 			container,
 			data,
 			platform: this._platform,
-			readOnly: this._state.readOnly,
+			readOnly: this._state.readOnly || isTranslationView,
 			preview: this._preview,
 			tools: this._tools, // Read-only. Useful for retrieving properties (e.g., size, color) from an inactive tool
-			tool: this._state.tool,
-			selectedAnnotationIDs: this._state.selectedAnnotationIDs,
-			annotations: this._state.annotations.filter(x => !x._hidden),
+			tool: isTranslationView ? this._tools["pointer"] : this._state.tool,
+			selectedAnnotationIDs: isTranslationView
+				? []
+				: this._state.selectedAnnotationIDs,
+			annotations: isTranslationView
+				? []
+				: this._state.annotations.filter((x) => !x._hidden),
 			outline: this._state.outline,
-			showAnnotations: this._state.showAnnotations,
+			showAnnotations: isTranslationView
+				? false
+				: this._state.showAnnotations,
 			lightTheme: this._state.lightTheme,
 			darkTheme: this._state.darkTheme,
 			colorScheme: this._state.colorScheme,
-			findState: this._state[primary ? 'primaryViewFindState' : 'secondaryViewFindState'],
-			viewState: this._state[primary ? 'primaryViewState' : 'secondaryViewState'],
+			findState:
+				this._state[
+					primary ? "primaryViewFindState" : "secondaryViewFindState"
+				],
+			viewState:
+				this._state[
+					primary ? "primaryViewState" : "secondaryViewState"
+				],
 			location,
 			onChangeViewState,
 			onChangeViewStats,
-			onSetDataTransferAnnotations: this._handleSetDataTransferAnnotations.bind(this),
+			onSetDataTransferAnnotations:
+				this._handleSetDataTransferAnnotations.bind(this),
 			onAddAnnotation,
 			onUpdateAnnotations,
 			onOpenLink,
@@ -1095,10 +1475,12 @@ class Reader {
 			onFocusAnnotation,
 			onSetHiddenAnnotations,
 			getLocalizedString,
-			onDetectDocumentLanguage: this._handleDocumentLanguageDetected.bind(this)
+			onDetectDocumentLanguage:
+				this._handleDocumentLanguageDetected.bind(this),
+			isTranslationView,
 		};
 
-		if (this._type === 'pdf') {
+		if (this._type === "pdf") {
 			view = new PDFView({
 				...common,
 				password: this._password,
@@ -1106,7 +1488,7 @@ class Reader {
 				onRequestPassword,
 				onSetThumbnails,
 				onSetPageLabels,
-				onDeleteAnnotations // For complete ink erase
+				onDeleteAnnotations, // For complete ink erase
 			});
 
 			if (primary) {
@@ -1117,20 +1499,20 @@ class Reader {
 					onFinish: () => {
 						this._handleSetPrintPopup(null);
 					},
-					pdfView: view
+					pdfView: view,
 				});
 			}
-		} else if (this._type === 'epub') {
+		} else if (this._type === "epub") {
 			view = new EPUBView({
 				...common,
 				fontFamily: this._state.fontFamily,
 				hyphenate: this._state.hyphenate,
 				onEPUBEncrypted,
 			});
-		} else if (this._type === 'snapshot') {
+		} else if (this._type === "snapshot") {
 			view = new SnapshotView({
 				...common,
-				onSetZoom
+				onSetZoom,
 			});
 		}
 
@@ -1152,21 +1534,25 @@ class Reader {
 		document.getElementById("a11yAnnouncement").innerText = a11yMessage;
 	}
 
-	getUnsavedAnnotations() {
-
-	}
+	getUnsavedAnnotations() {}
 
 	deleteAnnotations(ids) {
 		if (ids.length > 1) {
-			if (!this._onConfirm(
-				this._getString('reader-prompt-delete-annotations-title'),
-				this._getString('reader-prompt-delete-annotations-text', { count: ids.length }),
-				this._getString('general-delete')
-			)) {
+			if (
+				!this._onConfirm(
+					this._getString("reader-prompt-delete-annotations-title"),
+					this._getString("reader-prompt-delete-annotations-text", {
+						count: ids.length,
+					}),
+					this._getString("general-delete")
+				)
+			) {
 				return 0;
 			}
 		}
-		let selectedAnnotationIDs = this._state.selectedAnnotationIDs.filter(id => !ids.includes(id));
+		let selectedAnnotationIDs = this._state.selectedAnnotationIDs.filter(
+			(id) => !ids.includes(id)
+		);
 		this._updateState({
 			selectedAnnotationIDs,
 			primaryViewAnnotationPopup: null,
@@ -1188,7 +1574,7 @@ class Reader {
 	 * @returns {{ count: number, lastModified?: Date }}
 	 */
 	getKOReaderAnnotationStats(metadata) {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		return this._primaryView.getKOReaderAnnotationStats(metadata);
 	}
 
@@ -1196,7 +1582,7 @@ class Reader {
 	 * @param {BufferSource} metadata
 	 */
 	importAnnotationsFromKOReaderMetadata(metadata) {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		this._primaryView.importAnnotationsFromKOReaderMetadata(metadata);
 	}
 
@@ -1205,7 +1591,7 @@ class Reader {
 	 * @returns {{ count: number, lastModified?: Date }}
 	 */
 	getCalibreAnnotationStats(metadata) {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		return this._primaryView.getCalibreAnnotationStats(metadata);
 	}
 
@@ -1213,7 +1599,7 @@ class Reader {
 	 * @param {string} metadata
 	 */
 	importAnnotationsFromCalibreMetadata(metadata) {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		this._primaryView.importAnnotationsFromCalibreMetadata(metadata);
 	}
 
@@ -1222,38 +1608,52 @@ class Reader {
 	 */
 	copy() {
 		let { activeElement } = document;
-		if (activeElement.nodeName === 'IFRAME' && activeElement.contentWindow) {
+		if (
+			activeElement.nodeName === "IFRAME" &&
+			activeElement.contentWindow
+		) {
 			activeElement.contentWindow.document.execCommand("copy");
-		}
-		else {
+		} else {
 			document.execCommand("copy");
 		}
 	}
 
+	_applyZoom(action) {
+		let translationSplit =
+			this._secondaryView?.isTranslationView?.() &&
+			this._state.translationActive;
+		if (translationSplit) {
+			this._primaryView?.[action]?.();
+			this._secondaryView?.[action]?.();
+		} else {
+			this._lastView?.[action]?.();
+		}
+	}
+
 	zoomIn() {
-		this._lastView.zoomIn();
+		this._applyZoom("zoomIn");
 	}
 
 	zoomOut() {
-		this._lastView.zoomOut();
+		this._applyZoom("zoomOut");
 	}
 
 	zoomReset() {
-		this._lastView.zoomReset();
+		this._applyZoom("zoomReset");
 	}
 
 	zoomAuto() {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		this._lastView.zoomAuto();
 	}
 
 	zoomPageWidth() {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		this._lastView.zoomPageWidth();
 	}
 
 	zoomPageHeight() {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		this._lastView.zoomPageHeight();
 	}
 
@@ -1261,12 +1661,11 @@ class Reader {
 		await this._lastView.initializedPromise;
 		// Select the annotation instead of just navigating when navigation is triggered externally
 		if (
-			location.annotationID
-			&& this._state.annotations.find(x => x.id === location.annotationID)
+			location.annotationID &&
+			this._state.annotations.find((x) => x.id === location.annotationID)
 		) {
 			this.setSelectedAnnotations([location.annotationID]);
-		}
-		else {
+		} else {
 			this._lastView.navigate(location, options);
 		}
 	}
@@ -1280,67 +1679,93 @@ class Reader {
 	}
 
 	navigateToFirstPage() {
-		this._ensureType('pdf', 'epub');
+		this._ensureType("pdf", "epub");
 		this._lastView.navigateToFirstPage();
 	}
 
 	navigateToLastPage() {
-		this._ensureType('pdf', 'epub');
+		this._ensureType("pdf", "epub");
 		this._lastView.navigateToLastPage();
 	}
 
 	navigateToPreviousPage() {
-		this._ensureType('pdf', 'epub');
+		this._ensureType("pdf", "epub");
 		this._lastView.navigateToPreviousPage();
 	}
 
 	navigateToNextPage() {
-		this._ensureType('pdf', 'epub');
+		this._ensureType("pdf", "epub");
 		this._lastView.navigateToNextPage();
 	}
 
 	navigateToPreviousSection() {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		this._lastView.navigateToPreviousSection();
 	}
 
 	navigateToNextSection() {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		this._lastView.navigateToNextSection();
 	}
 
 	// Note: It's a bit weird, but this function is also used to deselect text in views, if an empty ids array is provided
 	setSelectedAnnotations(ids, triggeredFromView, triggeringEvent) {
 		// Temporary workaround for deselecting annotations
-		if (!ids.length && this._state.selectedAnnotationIDs.some(id => !this._state.annotations.find(x => x.id === id))) {
+		if (
+			!ids.length &&
+			this._state.selectedAnnotationIDs.some(
+				(id) => !this._state.annotations.find((x) => x.id === id)
+			)
+		) {
 			this._updateState({ selectedAnnotationIDs: [] });
 		}
 
 		let deleteIDs = [];
 		for (let annotation of this._state.annotations) {
-			if (annotation.type === 'text' && !annotation.comment && !ids.includes(annotation.id)) {
+			if (
+				annotation.type === "text" &&
+				!annotation.comment &&
+				!ids.includes(annotation.id)
+			) {
 				deleteIDs.push(annotation.id);
 			}
 		}
-		this._annotationManager.deleteAnnotations(deleteIDs)
+		this._annotationManager.deleteAnnotations(deleteIDs);
 
 		// Prevent accidental annotation deselection if modifier is pressed
-		let shift = triggeringEvent ? triggeringEvent.shiftKey : this._keyboardManager.shift;
-		let mod = triggeringEvent ? (triggeringEvent.ctrlKey || triggeringEvent.metaKey && isMac()) : this._keyboardManager.mod;
+		let shift = triggeringEvent
+			? triggeringEvent.shiftKey
+			: this._keyboardManager.shift;
+		let mod = triggeringEvent
+			? triggeringEvent.ctrlKey || (triggeringEvent.metaKey && isMac())
+			: this._keyboardManager.mod;
 		// Note: Using this._state.selectedAnnotationIDs.length here and below to avoid
 		// https://github.com/zotero/zotero/issues/3381 (annotation selection, even passing an empty array,
 		// also triggers text deselection)
 		// TODO: This prevents annotation deselection when holding shift and trying to select text under the annotation
-		if (this._state.selectedAnnotationIDs.length && !ids.length && triggeredFromView && (shift || mod)) {
+		if (
+			this._state.selectedAnnotationIDs.length &&
+			!ids.length &&
+			triggeredFromView &&
+			(shift || mod)
+		) {
 			return;
 		}
 
 		// TODO: This is temporary, until annotation selection and focus management is reworked
-		if (this._state.selectedAnnotationIDs.length && !triggeringEvent && !shift && mod && !this._keyboardManager.pointerDown) {
+		if (
+			this._state.selectedAnnotationIDs.length &&
+			!triggeringEvent &&
+			!shift &&
+			mod &&
+			!this._keyboardManager.pointerDown
+		) {
 			return;
 		}
 
-		let reselecting = ids.length === 1 && this._state.selectedAnnotationIDs.includes(ids[0]);
+		let reselecting =
+			ids.length === 1 &&
+			this._state.selectedAnnotationIDs.includes(ids[0]);
 
 		if (ids[0]) {
 			this._lastSelectedAnnotationID = ids[0];
@@ -1350,29 +1775,54 @@ class Reader {
 		this._annotationSelectionTriggeredFromView = triggeredFromView;
 		if (ids.length === 1) {
 			let id = ids[0];
-			let annotation = this._annotationManager._annotations.find(x => x.id === id);
+			let annotation = this._annotationManager._annotations.find(
+				(x) => x.id === id
+			);
 			if (annotation) {
 				if (shift && this._state.selectedAnnotationIDs.length) {
 					let selectedIDs = this._state.selectedAnnotationIDs.slice();
-					let annotations = this._state.annotations.filter(x => !x._hidden);
+					let annotations = this._state.annotations.filter(
+						(x) => !x._hidden
+					);
 
-					let annotationIndex = annotations.findIndex(x => x.id === id);
-					let lastSelectedIndex = annotations.findIndex(x => x.id === selectedIDs.slice(-1)[0]);
-					let selectedIndices = selectedIDs.map(id => annotations.findIndex(annotation => annotation.id === id));
+					let annotationIndex = annotations.findIndex(
+						(x) => x.id === id
+					);
+					let lastSelectedIndex = annotations.findIndex(
+						(x) => x.id === selectedIDs.slice(-1)[0]
+					);
+					let selectedIndices = selectedIDs.map((id) =>
+						annotations.findIndex(
+							(annotation) => annotation.id === id
+						)
+					);
 					let minSelectedIndex = Math.min(...selectedIndices);
 					let maxSelectedIndex = Math.max(...selectedIndices);
 					if (annotationIndex < minSelectedIndex) {
-						for (let i = annotationIndex; i < minSelectedIndex; i++) {
+						for (
+							let i = annotationIndex;
+							i < minSelectedIndex;
+							i++
+						) {
 							selectedIDs.push(annotations[i].id);
 						}
-					}
-					else if (annotationIndex > maxSelectedIndex) {
-						for (let i = maxSelectedIndex + 1; i <= annotationIndex; i++) {
+					} else if (annotationIndex > maxSelectedIndex) {
+						for (
+							let i = maxSelectedIndex + 1;
+							i <= annotationIndex;
+							i++
+						) {
 							selectedIDs.push(annotations[i].id);
 						}
-					}
-					else {
-						for (let i = Math.min(annotationIndex, lastSelectedIndex); i <= Math.max(annotationIndex, lastSelectedIndex); i++) {
+					} else {
+						for (
+							let i = Math.min(
+								annotationIndex,
+								lastSelectedIndex
+							);
+							i <= Math.max(annotationIndex, lastSelectedIndex);
+							i++
+						) {
 							if (i === lastSelectedIndex) {
 								continue;
 							}
@@ -1383,68 +1833,105 @@ class Reader {
 						}
 					}
 					this._updateState({ selectedAnnotationIDs: selectedIDs });
-				}
-				else if (mod && this._state.selectedAnnotationIDs.length) {
+				} else if (mod && this._state.selectedAnnotationIDs.length) {
 					let selectedIDs = this._state.selectedAnnotationIDs.slice();
 					let existingIndex = selectedIDs.indexOf(id);
 					if (existingIndex >= 0) {
 						selectedIDs.splice(existingIndex, 1);
-					}
-					else {
+					} else {
 						selectedIDs.push(id);
 					}
 					this._updateState({ selectedAnnotationIDs: selectedIDs });
-				}
-				else {
+				} else {
 					this._updateState({ selectedAnnotationIDs: ids });
 
 					// Don't navigate to annotation or focus comment if opening a context menu
 					// unless it is a note (so that one can type after creating it via shortcut, same as with text annotation)
 					if (!triggeringEvent || triggeringEvent.button !== 2) {
 						if (triggeredFromView) {
-							if (['note', 'highlight', 'underline', 'image'].includes(annotation.type)
-								&& !annotation.comment
-								&& (!triggeringEvent || !('key' in triggeringEvent) || annotation.type === 'note')
+							if (
+								[
+									"note",
+									"highlight",
+									"underline",
+									"image",
+								].includes(annotation.type) &&
+								!annotation.comment &&
+								(!triggeringEvent ||
+									!("key" in triggeringEvent) ||
+									annotation.type === "note")
 							) {
 								this._enableAnnotationDeletionFromComment = true;
 								setTimeout(() => {
 									let content;
-									if (this._state.sidebarOpen && this._state.sidebarView === 'annotations') {
-										content = document.querySelector(`[data-sidebar-annotation-id="${id}"] .comment .content`);
-									}
-									else {
-										content = document.querySelector(`.annotation-popup .comment .content`);
+									if (
+										this._state.sidebarOpen &&
+										this._state.sidebarView ===
+											"annotations"
+									) {
+										content = document.querySelector(
+											`[data-sidebar-annotation-id="${id}"] .comment .content`
+										);
+									} else {
+										content = document.querySelector(
+											`.annotation-popup .comment .content`
+										);
 									}
 									content?.focus();
 								}, 50);
 							}
-						}
-						else {
-							this._lastView.navigate({ annotationID: annotation.id });
+						} else {
+							this._lastView.navigate({
+								annotationID: annotation.id,
+							});
 						}
 					}
 					// After a small delay for focus to settle, announce to screen readers that annotation
 					// is selected and how one can manipulate it
 					setTimeout(() => {
-						let annotationType = getLocalizedString(`reader-${annotation.type}-annotation`);
-						let a11yAnnouncement = getLocalizedString('reader-a11y-annotation-selected', { type: annotationType });
+						let annotationType = getLocalizedString(
+							`reader-${annotation.type}-annotation`
+						);
+						let a11yAnnouncement = getLocalizedString(
+							"reader-a11y-annotation-selected",
+							{ type: annotationType }
+						);
 						// Announce if there is a popup.
-						if (document.querySelector('.annotation-popup')) {
-							a11yAnnouncement += ' ' + getLocalizedString('reader-a11y-annotation-popup-appeared');
+						if (document.querySelector(".annotation-popup")) {
+							a11yAnnouncement +=
+								" " +
+								getLocalizedString(
+									"reader-a11y-annotation-popup-appeared"
+								);
 						}
 						// Announce available keyboard interface options for this annotation type
-						if (['highlight', 'underline'].includes(annotation.type)) {
-							a11yAnnouncement += ' ' + getLocalizedString('reader-a11y-edit-text-annotation');
-						}
-						else if (['note', 'text', 'image'].includes(annotation.type)) {
-							a11yAnnouncement += ' ' + getLocalizedString('reader-a11y-move-annotation');
-							if (['text', 'image'].includes(annotation.type)) {
-								a11yAnnouncement += ' ' + getLocalizedString('reader-a11y-resize-annotation');
+						if (
+							["highlight", "underline"].includes(annotation.type)
+						) {
+							a11yAnnouncement +=
+								" " +
+								getLocalizedString(
+									"reader-a11y-edit-text-annotation"
+								);
+						} else if (
+							["note", "text", "image"].includes(annotation.type)
+						) {
+							a11yAnnouncement +=
+								" " +
+								getLocalizedString(
+									"reader-a11y-move-annotation"
+								);
+							if (["text", "image"].includes(annotation.type)) {
+								a11yAnnouncement +=
+									" " +
+									getLocalizedString(
+										"reader-a11y-resize-annotation"
+									);
 							}
 						}
 						// only announce if the content view is focused. E.g. if comment in
 						// sidebar has focus, say nothing as it will not be relevant
-						if (document.activeElement.nodeName === 'IFRAME') {
+						if (document.activeElement.nodeName === "IFRAME") {
 							this.setA11yMessage(a11yAnnouncement);
 						}
 					}, 100);
@@ -1454,14 +1941,19 @@ class Reader {
 			if (this._state.selectedAnnotationIDs.length === 1) {
 				// Wait a bit to make sure the annotation view is rendered
 				setTimeout(() => {
-					let sidebarItem = document.querySelector(`[data-sidebar-annotation-id="${id}"]`);
+					let sidebarItem = document.querySelector(
+						`[data-sidebar-annotation-id="${id}"]`
+					);
 					if (sidebarItem) {
-						sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+						sidebarItem.scrollIntoView({
+							behavior: "smooth",
+							block: "nearest",
+							inline: "nearest",
+						});
 					}
 				}, 50);
 			}
-		}
-		else {
+		} else {
 			this._updateState({ selectedAnnotationIDs: ids });
 		}
 	}
@@ -1486,7 +1978,7 @@ class Reader {
 		this._updateState({ customThemes });
 
 		let themes = [...DEFAULT_THEMES, ...(customThemes || [])];
-		themes = new Map(themes.map(theme => [theme.id, theme]));
+		themes = new Map(themes.map((theme) => [theme.id, theme]));
 
 		let lightThemeID = this._state.lightTheme?.id;
 		if (lightThemeID) {
@@ -1503,14 +1995,14 @@ class Reader {
 
 	setLightTheme(themeName) {
 		let themes = [...DEFAULT_THEMES, ...(this._state.customThemes || [])];
-		themes = new Map(themes.map(theme => [theme.id, theme]));
+		themes = new Map(themes.map((theme) => [theme.id, theme]));
 		let lightTheme = themes.get(themeName) || null;
 		this._updateState({ lightTheme });
 	}
 
 	setDarkTheme(themeName) {
 		let themes = [...DEFAULT_THEMES, ...(this._state.customThemes || [])];
-		themes = new Map(themes.map(theme => [theme.id, theme]));
+		themes = new Map(themes.map((theme) => [theme.id, theme]));
 		let darkTheme = themes.get(themeName) || null;
 		this._updateState({ darkTheme });
 	}
@@ -1556,8 +2048,7 @@ class Reader {
 			this._updateState({ secondaryViewAnnotationPopup: null });
 			this._updateState({ secondaryViewSelectionPopup: null });
 			this._updateState({ secondaryViewOverlyPopup: null });
-		}
-		else {
+		} else {
 			this._updateState({ primaryViewAnnotationPopup: null });
 			this._updateState({ primaryViewSelectionPopup: null });
 			this._updateState({ primaryViewOverlayPopup: null });
@@ -1581,15 +2072,13 @@ class Reader {
 	}
 
 	print() {
-		if (this._type === 'pdf') {
+		if (this._type === "pdf") {
 			if (this._state.annotations.length) {
 				this._handleSetPrintPopup({});
-			}
-			else {
+			} else {
 				window.print();
 			}
-		}
-		else {
+		} else {
 			// Show print popup with indeterminate progress bar
 			this._handleSetPrintPopup(null);
 			this._primaryView.print().then(() => {
@@ -1599,7 +2088,7 @@ class Reader {
 	}
 
 	abortPrint() {
-		if (this._type === 'pdf') {
+		if (this._type === "pdf") {
 			window.abortPrint();
 		}
 	}
@@ -1625,31 +2114,48 @@ class Reader {
 		let selectedIDs = this._state.selectedAnnotationIDs;
 		annotations = [annotation];
 		if (selectedIDs.includes(annotation.id) && selectedIDs.length > 1) {
-			annotations = this._state.annotations.filter(x => selectedIDs.includes(x.id));
+			annotations = this._state.annotations.filter((x) =>
+				selectedIDs.includes(x.id)
+			);
 		}
 		if (annotations.length > 1) {
 			setMultiDragPreview(dataTransfer);
 		}
 		// annotations = annotations.filter(x => x.type !== 'ink');
-		let plainText = annotations.map((annotation) => {
-			let formatted = '';
-			if (annotation.text) {
-				let text = annotation.text.trim();
-				formatted = fromText ? text : '“' + text + '”';
-			}
-			let comment = annotation.comment?.trim();
-			if (comment) {
-				if (formatted) {
-					formatted += comment.includes('\n') ? '\n' : ' ';
+		let plainText = annotations
+			.map((annotation) => {
+				let formatted = "";
+				if (annotation.text) {
+					let text = annotation.text.trim();
+					formatted = fromText ? text : "“" + text + "”";
 				}
-				formatted += comment;
-			}
-			return formatted;
-		}).filter(x => x).join('\n\n');
+				let comment = annotation.comment?.trim();
+				if (comment) {
+					if (formatted) {
+						formatted += comment.includes("\n") ? "\n" : " ";
+					}
+					formatted += comment;
+				}
+				return formatted;
+			})
+			.filter((x) => x)
+			.join("\n\n");
 		annotations = annotations.map(
-			({ id, type, text, color, comment, image, position, pageLabel, tags }) => {
+			({
+				id,
+				type,
+				text,
+				color,
+				comment,
+				image,
+				position,
+				pageLabel,
+				tags,
+			}) => {
 				if (image) {
-					let img = document.querySelector(`[data-sidebar-annotation-id="${id}"] img`);
+					let img = document.querySelector(
+						`[data-sidebar-annotation-id="${id}"] img`
+					);
 					if (img) {
 						image = getImageDataURL(img);
 					}
@@ -1663,32 +2169,45 @@ class Reader {
 					image,
 					position,
 					pageLabel,
-					tags
+					tags,
 				};
 			}
 		);
-		window._draggingAnnotationIDs = annotations.map(x => x.id);
+		window._draggingAnnotationIDs = annotations.map((x) => x.id);
 		// Clear image data set on some untested type (when drag is initiated on img),
 		// which also prevents word processors from using `text/plain`, and
 		// results to dumped base64 content (LibreOffice) or image (Google Docs)
 		dataTransfer.clearData();
-		dataTransfer.setData('text/plain', plainText || ' ');
+		dataTransfer.setData("text/plain", plainText || " ");
 		this._onSetDataTransferAnnotations(dataTransfer, annotations, fromText);
 	}
 
 	_handleOpenPageLabelPopup(id) {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		this._onBringReaderToFront?.(true);
 		let pageLabels = this._state.pageLabels;
 		let selectedIDs = this._state.selectedAnnotationIDs;
 		let currentAnnotation = this._annotationManager._getAnnotationByID(id);
-		let selectedAnnotations = this._annotationManager._annotations.filter(x => selectedIDs.includes(x.id));
+		let selectedAnnotations = this._annotationManager._annotations.filter(
+			(x) => selectedIDs.includes(x.id)
+		);
 		let allAnnotations = this._annotationManager._annotations;
 		// Get target rect from preview component in the sidebar or a view popup
-		let labelNode = document.querySelector(`[data-sidebar-annotation-id="${id}"] header .label, .view-popup header .label`);
+		let labelNode = document.querySelector(
+			`[data-sidebar-annotation-id="${id}"] header .label, .view-popup header .label`
+		);
 		let { left, top, right, bottom } = labelNode.getBoundingClientRect();
 		let rect = [left, top, right, bottom];
-		this._updateState({ labelPopup: { currentAnnotation, selectedAnnotations, allAnnotations, rect, selectedIDs, pageLabels } });
+		this._updateState({
+			labelPopup: {
+				currentAnnotation,
+				selectedAnnotations,
+				allAnnotations,
+				rect,
+				selectedIDs,
+				pageLabels,
+			},
+		});
 	}
 
 	_handleLabelPopupClose() {
@@ -1698,16 +2217,23 @@ class Reader {
 
 	_handleDeleteAnnotations = (ids) => {
 		let primaryViewAnnotationPopup = this._state.primaryViewAnnotationPopup;
-		if (primaryViewAnnotationPopup && ids.includes(primaryViewAnnotationPopup.annotation.id)) {
+		if (
+			primaryViewAnnotationPopup &&
+			ids.includes(primaryViewAnnotationPopup.annotation.id)
+		) {
 			primaryViewAnnotationPopup = null;
 		}
-		let secondaryViewAnnotationPopup = this._state.secondaryViewAnnotationPopup;
-		if (secondaryViewAnnotationPopup && ids.includes(secondaryViewAnnotationPopup.annotation.id)) {
+		let secondaryViewAnnotationPopup =
+			this._state.secondaryViewAnnotationPopup;
+		if (
+			secondaryViewAnnotationPopup &&
+			ids.includes(secondaryViewAnnotationPopup.annotation.id)
+		) {
 			secondaryViewAnnotationPopup = null;
 		}
 		this._updateState({
 			primaryViewAnnotationPopup,
-			secondaryViewAnnotationPopup
+			secondaryViewAnnotationPopup,
 		});
 		this._onDeleteAnnotations(ids);
 	};
@@ -1718,25 +2244,29 @@ class Reader {
 	}
 
 	rotatePageLeft() {
-		this._ensureType('pdf');
-		let { pageIndex } = (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats);
+		this._ensureType("pdf");
+		let { pageIndex } = this._state.primary
+			? this._state.primaryViewStats
+			: this._state.secondaryViewStats;
 		this.rotatePages([pageIndex], 270);
 	}
 
 	rotatePageRight() {
-		this._ensureType('pdf');
-		let { pageIndex } = (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats);
+		this._ensureType("pdf");
+		let { pageIndex } = this._state.primary
+			? this._state.primaryViewStats
+			: this._state.secondaryViewStats;
 		this.rotatePages([pageIndex], 90);
 	}
 
 	rotatePages(pageIndexes, degrees) {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		// TODO: Automatically recalculate view state top and left values to prevent unexpected PDF view scroll
 		this._onRotatePages(pageIndexes, degrees);
 	}
 
 	deletePages(pageIndexes, degrees) {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		this._onDeletePages(pageIndexes, degrees);
 	}
 
@@ -1745,114 +2275,186 @@ class Reader {
 	}
 
 	get zoomAutoEnabled() {
-		this._ensureType('pdf');
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).zoomAutoEnabled;
+		this._ensureType("pdf");
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).zoomAutoEnabled;
 	}
 
 	get zoomPageWidthEnabled() {
-		this._ensureType('pdf');
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).zoomPageWidthEnabled;
+		this._ensureType("pdf");
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).zoomPageWidthEnabled;
 	}
 
 	get zoomPageHeightEnabled() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).zoomPageHeightEnabled;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).zoomPageHeightEnabled;
 	}
 
 	get scrollMode() {
-		this._ensureType('pdf');
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).scrollMode;
+		this._ensureType("pdf");
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).scrollMode;
 	}
 
 	set scrollMode(value) {
-		this._ensureType('pdf');
+		this._ensureType("pdf");
 		this._lastView.setScrollMode(value);
 	}
 
 	get spreadMode() {
-		this._ensureType('pdf', 'epub');
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).spreadMode;
+		this._ensureType("pdf", "epub");
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).spreadMode;
 	}
 
 	set spreadMode(value) {
-		this._ensureType('pdf', 'epub');
+		this._ensureType("pdf", "epub");
 		this._lastView.setSpreadMode(value);
 	}
 
 	get canCopy() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canCopy;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canCopy;
 	}
 
 	get canZoomIn() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canZoomIn;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canZoomIn;
 	}
 
 	get canZoomOut() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canZoomOut;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canZoomOut;
 	}
 
 	get canZoomReset() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canZoomReset;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canZoomReset;
 	}
 
 	get canNavigateBack() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateBack;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateBack;
 	}
 
 	get canNavigateForward() {
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateForward;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateForward;
 	}
 
 	get canNavigateToFirstPage() {
-		if (!['pdf', 'epub'].includes(this._type)) {
+		if (!["pdf", "epub"].includes(this._type)) {
 			return false;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateToFirstPage;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateToFirstPage;
 	}
 
 	get canNavigateToLastPage() {
-		if (!['pdf', 'epub'].includes(this._type)) {
+		if (!["pdf", "epub"].includes(this._type)) {
 			return false;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateToLastPage;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateToLastPage;
 	}
 
 	get canNavigateToPreviousPage() {
-		if (!['pdf', 'epub'].includes(this._type)) {
+		if (!["pdf", "epub"].includes(this._type)) {
 			return false;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateToPreviousPage;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateToPreviousPage;
 	}
 
 	get canNavigateToNextPage() {
-		if (!['pdf', 'epub'].includes(this._type)) {
+		if (!["pdf", "epub"].includes(this._type)) {
 			return false;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateToNextPage;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateToNextPage;
 	}
 
 	get canNavigateToPreviousSection() {
-		if (this._type !== 'epub') {
+		if (this._type !== "epub") {
 			return false;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateToPreviousSection;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateToPreviousSection;
 	}
 
 	get canNavigateToNextSection() {
-		if (this._type !== 'epub') {
+		if (this._type !== "epub") {
 			return false;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).canNavigateToNextSection;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).canNavigateToNextSection;
 	}
 
 	get flowMode() {
-		if (this._type !== 'epub') {
+		if (this._type !== "epub") {
 			return undefined;
 		}
-		return (this._state.primary ? this._state.primaryViewStats : this._state.secondaryViewStats).flowMode;
+		return (
+			this._state.primary
+				? this._state.primaryViewStats
+				: this._state.secondaryViewStats
+		).flowMode;
 	}
 
 	set flowMode(value) {
-		this._ensureType('epub');
+		this._ensureType("epub");
 		this._lastView.setFlowMode(value);
 	}
 }

@@ -21,13 +21,17 @@ async function createReader() {
 		demo = snapshot;
 	}
 	let res = await fetch(demo.fileName);
+	let transRes = await fetch(demo.translationFileName);
+	let translationBuf = new Uint8Array(await transRes.arrayBuffer());
+	let dataBuf = new Uint8Array(await res.arrayBuffer());
 	let reader = new Reader({
 		type,
 		readOnly: false,
 		data: {
-			buf: new Uint8Array(await res.arrayBuffer()),
+			buf: dataBuf,
 			url: new URL("/", window.location).toString(),
 		},
+		translationBuf: translationBuf,
 		// rtl: true,
 		annotations: demo.annotations,
 		primaryViewState: demo.state,

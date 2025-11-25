@@ -93,6 +93,7 @@
 	align-items: center;
 	justify-content: center;
 	border-radius: 5px;
+	cursor: pointer;
 
 	&:hover {
 		background-color: var(--fill-quinary);
@@ -363,6 +364,7 @@
 	.download-toggle {
 		padding: 0 8px;
 		gap: 4px;
+		cursor: pointer;
 	}
 
 	.download-dropdown-menu {
