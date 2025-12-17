@@ -1117,6 +1117,34 @@ class PDFView {
 		}
 	}
 
+	getZoomState() {
+		let viewer = this._iframeWindow?.PDFViewerApplication?.pdfViewer;
+		if (!viewer) {
+			return null;
+		}
+		return {
+			scale: viewer.currentScale,
+			scaleValue: viewer.currentScaleValue,
+		};
+	}
+
+	setZoomState(zoomState) {
+		let viewer = this._iframeWindow?.PDFViewerApplication?.pdfViewer;
+		if (!viewer || !zoomState) {
+			return;
+		}
+		if (
+			typeof zoomState.scaleValue === 'string' &&
+			zoomState.scaleValue.length
+		) {
+			viewer.currentScaleValue = zoomState.scaleValue;
+			return;
+		}
+		if (typeof zoomState.scale === 'number' && !Number.isNaN(zoomState.scale)) {
+			viewer.currentScaleValue = zoomState.scale;
+		}
+	}
+
 	zoomReset() {
 		this.zoomPageWidth();
 	}

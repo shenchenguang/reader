@@ -96,8 +96,7 @@ class Reader {
 		this._onStopTranslation = options.onStopTranslation;
 		this._onDownloadTranslation = options.onDownloadTranslation;
 		this._onDownloadOriginal = options.onDownloadOriginal;
-		this._onExposeTranslationReceiver =
-			options.onExposeTranslationReceiver;
+		this._onExposeTranslationReceiver = options.onExposeTranslationReceiver;
 
 		if (Array.isArray(options.ftl)) {
 			for (let ftl of options.ftl) {
@@ -109,6 +108,7 @@ class Reader {
 		this._primaryView = null;
 		this._secondaryView = null;
 		this._lastViewPrimary = true;
+		this._preTranslationZoomState = null;
 
 		this.initializedPromise = new Promise(
 			(resolve) => (this._resolveInitializedPromise = resolve)
@@ -1062,7 +1062,12 @@ class Reader {
 	setTranslationBuf(buf) {
 		this._translationBuf = buf || null;
 		let active = !!buf;
+		let wasTranslationActive = this._state.translationActive;
 		let previousSplitType = this._state.splitType;
+		if (active && !wasTranslationActive) {
+			this._preTranslationZoomState =
+				this._primaryView?.getZoomState?.() || null;
+		}
 		let update = { translationActive: active, translationLoading: false };
 		if (
 			active &&
@@ -1075,6 +1080,16 @@ class Reader {
 			update.splitType = null;
 		}
 		this._updateState(update);
+
+		if (!active && wasTranslationActive) {
+			let zoomState = this._preTranslationZoomState;
+			if (zoomState && this._primaryView?.setZoomState) {
+				this._primaryView.initializedPromise?.then(() => {
+					this._primaryView?.setZoomState(zoomState);
+				});
+			}
+			this._preTranslationZoomState = null;
+		}
 
 		// If we already had a translation view open, rebuild it with the new buffer
 		if (
