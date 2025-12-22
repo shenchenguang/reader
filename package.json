@@ -3,7 +3,8 @@
 	"version": "2.0.0",
 	"description": "Zotero Reader",
 	"scripts": {
-		"build": "npm run build:pdf.js && npm run build:reader",
+		"build": "npm run build:pdf.js && npm run build:reader && npm run deploy:wentian",
+		"deploy:wentian": "rm -rf ../wentian-desktop/src/renderer/public/static/zotero && cp -R build/zotero ../wentian-desktop/src/renderer/public/static/zotero",
 		"build:pdf.js": "sh pdfjs/build",
 		"build:reader": "webpack",
 		"build:ios": "webpack --config-name ios",
