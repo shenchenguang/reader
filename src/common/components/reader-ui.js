@@ -1,28 +1,28 @@
 import { LocalizationProvider, ReactLocalization } from "@fluent/react";
-import React, { Fragment, useImperativeHandle, useRef, useState } from 'react';
-import { bundle } from '../../fluent';
-import ContextMenu from './context-menu';
+import React, { Fragment, useImperativeHandle, useRef, useState } from "react";
+import { bundle } from "../../fluent";
+import ContextMenu from "./context-menu";
 import AppearancePopup from "./modal-popup/appearance-popup";
-import LabelPopup from './modal-popup/label-popup';
-import PasswordPopup from './modal-popup/password-popup';
-import PrintPopup from './modal-popup/print-popup';
-import ThemePopup from './modal-popup/theme-popup';
-import AnnotationsView from './sidebar/annotations-view';
-import OutlineView from './sidebar/outline-view';
-import Sidebar from './sidebar/sidebar';
-import SidebarResizer from './sidebar/sidebar-resizer';
-import ThumbnailsView from './sidebar/thumbnails-view';
-import SplitViewResizer from './split-view-resizer';
-import Toolbar from './toolbar';
-import AnnotationPopup from './view-popup/annotation-popup';
-import FindPopup from './view-popup/find-popup';
-import OverlayPopup from './view-popup/overlay-popup';
-import SelectionPopup from './view-popup/selection-popup';
+import LabelPopup from "./modal-popup/label-popup";
+import PasswordPopup from "./modal-popup/password-popup";
+import PrintPopup from "./modal-popup/print-popup";
+import ThemePopup from "./modal-popup/theme-popup";
+import AnnotationsView from "./sidebar/annotations-view";
+import OutlineView from "./sidebar/outline-view";
+import Sidebar from "./sidebar/sidebar";
+import SidebarResizer from "./sidebar/sidebar-resizer";
+import ThumbnailsView from "./sidebar/thumbnails-view";
+import SplitViewResizer from "./split-view-resizer";
+import Toolbar from "./toolbar";
+import AnnotationPopup from "./view-popup/annotation-popup";
+import FindPopup from "./view-popup/find-popup";
+import OverlayPopup from "./view-popup/overlay-popup";
+import SelectionPopup from "./view-popup/selection-popup";
 
 function View(props) {
 	let { primary, state } = props;
 
-	let name = primary ? 'primary' : 'secondary';
+	let name = primary ? "primary" : "secondary";
 
 	function handleFindStateChange(params) {
 		props.onChangeFindState(primary, params);
@@ -41,59 +41,77 @@ function View(props) {
 	}
 
 	return (
-		<div className={name + '-view'}>
+		<div className={name + "-view"}>
 			<div
 				data-tabstop={1}
 				tabIndex={-1}
 				data-proxy={`#${name}-view > iframe`}
-				style={{ position: 'absolute' }}
+				style={{ position: "absolute" }}
 			/>
-			{state[name + 'ViewSelectionPopup'] && !state.readOnly &&
+			{state[name + "ViewSelectionPopup"] && !state.readOnly && (
 				<SelectionPopup
-					params={state[name + 'ViewSelectionPopup']}
-					textSelectionAnnotationMode={state.textSelectionAnnotationMode}
+					params={state[name + "ViewSelectionPopup"]}
+					textSelectionAnnotationMode={
+						state.textSelectionAnnotationMode
+					}
 					enableAddToNote={state.enableAddToNote}
 					onAddToNote={props.onAddToNote}
 					onAddAnnotation={props.onAddAnnotation}
-					onChangeTextSelectionAnnotationMode={props.onChangeTextSelectionAnnotationMode}
+					onChangeTextSelectionAnnotationMode={
+						props.onChangeTextSelectionAnnotationMode
+					}
 					selectedTextMenu={props.state.selectedTextMenu}
 				/>
-			}
-			{state[name + 'ViewAnnotationPopup']
-				&& (
-					(!state.sidebarOpen || state.sidebarView !== 'annotations')
-					&& state.annotations.find(x => x.id === state[name + 'ViewAnnotationPopup'].annotation.id)
-				)
-				&& <AnnotationPopup
-					type={props.type}
-					readOnly={state.readOnly}
-					params={state[name + 'ViewAnnotationPopup']}
-					annotation={state.annotations.find(x => x.id === state[name + 'ViewAnnotationPopup'].annotation.id)}
-					onChange={(annotation) => props.onUpdateAnnotations([annotation])}
-					onDragStart={() => {}}
-					onOpenTagsPopup={props.onOpenTagsPopup}
-					onOpenPageLabelPopup={props.onOpenPageLabelPopup}
-					onOpenAnnotationContextMenu={props.onOpenAnnotationContextMenu}
-					onSetDataTransferAnnotations={props.onSetDataTransferAnnotations}
-				/>}
-			{state[name + 'ViewOverlayPopup'] &&
+			)}
+			{state[name + "ViewAnnotationPopup"] &&
+				(!state.sidebarOpen || state.sidebarView !== "annotations") &&
+				state.annotations.find(
+					(x) =>
+						x.id ===
+						state[name + "ViewAnnotationPopup"].annotation.id
+				) && (
+					<AnnotationPopup
+						type={props.type}
+						readOnly={state.readOnly}
+						params={state[name + "ViewAnnotationPopup"]}
+						annotation={state.annotations.find(
+							(x) =>
+								x.id ===
+								state[name + "ViewAnnotationPopup"].annotation
+									.id
+						)}
+						onChange={(annotation) =>
+							props.onUpdateAnnotations([annotation])
+						}
+						onDragStart={() => {}}
+						onOpenTagsPopup={props.onOpenTagsPopup}
+						onOpenPageLabelPopup={props.onOpenPageLabelPopup}
+						onOpenAnnotationContextMenu={
+							props.onOpenAnnotationContextMenu
+						}
+						onSetDataTransferAnnotations={
+							props.onSetDataTransferAnnotations
+						}
+					/>
+				)}
+			{state[name + "ViewOverlayPopup"] && (
 				<OverlayPopup
-					params={state[name + 'ViewOverlayPopup']}
+					params={state[name + "ViewOverlayPopup"]}
 					onOpenLink={props.onOpenLink}
 					onNavigate={props.onNavigate}
 					onClose={handleOverlayPopupClose}
 				/>
-			}
-			{state[name + 'ViewFindState'].popupOpen &&
+			)}
+			{state[name + "ViewFindState"].popupOpen && (
 				<FindPopup
-					params={state[name + 'ViewFindState']}
+					params={state[name + "ViewFindState"]}
 					onChange={handleFindStateChange}
 					onFindNext={handleFindNext}
 					onFindPrevious={handleFindPrevious}
 					onAddAnnotation={props.onAddAnnotation}
 					tools={props.tools}
 				/>
-			}
+			)}
 		</div>
 	);
 }
@@ -105,15 +123,22 @@ const ReaderUI = React.forwardRef((props, ref) => {
 
 	useImperativeHandle(ref, () => ({
 		setState,
-		sidebarScrollAnnotationIntoView: (id) => annotationsViewRef.current?.scrollAnnotationIntoView(id),
-		sidebarEditAnnotationText: (id) => annotationsViewRef.current?.editAnnotationText(id),
+		sidebarScrollAnnotationIntoView: (id) =>
+			annotationsViewRef.current?.scrollAnnotationIntoView(id),
+		sidebarEditAnnotationText: (id) =>
+			annotationsViewRef.current?.editAnnotationText(id),
 	}));
 
-	let findState = state.primary ? state.primaryViewFindState : state.secondaryViewFindState;
-	let viewStats = state.primary ? state.primaryViewStats : state.secondaryViewStats;
+	let findState = state.primary
+		? state.primaryViewFindState
+		: state.secondaryViewFindState;
+	let viewStats = state.primary
+		? state.primaryViewStats
+		: state.secondaryViewStats;
 
 	let stackedView = state.bottomPlaceholderHeight !== null;
-	let showContextPaneToggle = state.showContextPaneToggle && (stackedView || !state.contextPaneOpen);
+	let showContextPaneToggle =
+		state.showContextPaneToggle && (stackedView || !state.contextPaneOpen);
 
 	return (
 		<LocalizationProvider l10n={new ReactLocalization([bundle])}>
@@ -122,18 +147,24 @@ const ReaderUI = React.forwardRef((props, ref) => {
 					<Toolbar
 						type={props.type}
 						pageIndex={viewStats.pageIndex || 0}
-						pageLabel={viewStats.pageLabel || ''}
+						pageLabel={viewStats.pageLabel || ""}
 						pagesCount={viewStats.pagesCount || 0}
-						usePhysicalPageNumbers={viewStats.usePhysicalPageNumbers}
-						percentage={viewStats.percentage || ''}
+						usePhysicalPageNumbers={
+							viewStats.usePhysicalPageNumbers
+						}
+						percentage={viewStats.percentage || ""}
 						sidebarOpen={state.sidebarOpen}
 						sidebarView={state.sidebarView}
 						enableZoomOut={viewStats.canZoomOut}
 						enableZoomIn={viewStats.canZoomIn}
 						enableZoomReset={viewStats.canZoomReset}
 						enableNavigateBack={viewStats.canNavigateBack}
-						enableNavigateToPreviousPage={viewStats.canNavigateToPreviousPage}
-						enableNavigateToNextPage={viewStats.canNavigateToNextPage}
+						enableNavigateToPreviousPage={
+							viewStats.canNavigateToPreviousPage
+						}
+						enableNavigateToNextPage={
+							viewStats.canNavigateToNextPage
+						}
 						appearancePopup={state.appearancePopup}
 						findPopupOpen={findState.popupOpen}
 						themes={state.themes}
@@ -148,7 +179,9 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onZoomOut={props.onZoomOut}
 						onZoomReset={props.onZoomReset}
 						onNavigateBack={props.onNavigateBack}
-						onNavigateToPreviousPage={props.onNavigateToPreviousPage}
+						onNavigateToPreviousPage={
+							props.onNavigateToPreviousPage
+						}
 						onNavigateToNextPage={props.onNavigateToNextPage}
 						onChangePageNumber={props.onChangePageNumber}
 						onChangeTool={props.onChangeTool}
@@ -157,7 +190,9 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onToggleFind={props.onToggleFind}
 						onToggleContextPane={props.onToggleContextPane}
 						translateList={props.translateList}
-						showTranslationControls={state.translationControlsVisible}
+						showTranslationControls={
+							state.translationControlsVisible
+						}
 						translationActive={state.translationActive}
 						translationLoading={state.translationLoading}
 						onStartTranslation={props.onStartTranslation}
@@ -165,9 +200,16 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onDownloadTranslation={props.onDownloadTranslation}
 						onDownloadOriginal={props.onDownloadOriginal}
 						isEnglishDocument={state.documentIsEnglish}
+						onChangeTextSelectionAnnotationMode={
+							props.onChangeTextSelectionAnnotationMode
+						}
+						onToggleSyncScroll={props.onToggleSyncScroll}
+						onToggleShowOriginal={props.onToggleShowOriginal}
+						syncScrollEnabled={state.syncScrollEnabled}
+						showOriginalEnabled={state.showOriginalEnabled}
 					/>
 					<div>
-						{state.sidebarOpen === true &&
+						{state.sidebarOpen === true && (
 							<Sidebar
 								type={props.type}
 								view={state.sidebarView}
@@ -175,16 +217,24 @@ const ReaderUI = React.forwardRef((props, ref) => {
 								outline={state.outline}
 								outlineQuery={state.outlineQuery}
 								onUpdateOutline={props.onUpdateOutline}
-								onUpdateOutlineQuery={props.onUpdateOutlineQuery}
+								onUpdateOutlineQuery={
+									props.onUpdateOutlineQuery
+								}
 								onChangeView={props.onChangeSidebarView}
 								onChangeFilter={props.onChangeFilter}
 								thumbnailsView={
 									<ThumbnailsView
 										pageLabels={state.pageLabels}
 										thumbnails={state.thumbnails}
-										currentPageIndex={viewStats.pageIndex || 0}
-										onOpenThumbnailContextMenu={props.onOpenThumbnailContextMenu}
-										onRenderThumbnails={props.onRenderThumbnails}
+										currentPageIndex={
+											viewStats.pageIndex || 0
+										}
+										onOpenThumbnailContextMenu={
+											props.onOpenThumbnailContextMenu
+										}
+										onRenderThumbnails={
+											props.onRenderThumbnails
+										}
 										onNavigate={props.onNavigate}
 									/>
 								}
@@ -195,43 +245,82 @@ const ReaderUI = React.forwardRef((props, ref) => {
 										readOnly={state.readOnly}
 										filter={state.filter}
 										annotations={state.annotations}
-										selectedIDs={state.selectedAnnotationIDs}
+										selectedIDs={
+											state.selectedAnnotationIDs
+										}
 										authorName="test"
-										onSelectAnnotations={props.onSelectAnnotations}
-										onUpdateAnnotations={props.onUpdateAnnotations}
-										onSetDataTransferAnnotations={props.onSetDataTransferAnnotations}
+										onSelectAnnotations={
+											props.onSelectAnnotations
+										}
+										onUpdateAnnotations={
+											props.onUpdateAnnotations
+										}
+										onSetDataTransferAnnotations={
+											props.onSetDataTransferAnnotations
+										}
 										onOpenTagsPopup={props.onOpenTagsPopup}
-										onOpenPageLabelPopup={props.onOpenPageLabelPopup}
-										onOpenAnnotationContextMenu={props.onOpenAnnotationContextMenu}
-										onOpenSelectorContextMenu={props.onOpenSelectorContextMenu}
+										onOpenPageLabelPopup={
+											props.onOpenPageLabelPopup
+										}
+										onOpenAnnotationContextMenu={
+											props.onOpenAnnotationContextMenu
+										}
+										onOpenSelectorContextMenu={
+											props.onOpenSelectorContextMenu
+										}
 										onChangeFilter={props.onChangeFilter}
 									/>
 								}
 								outlineView={
 									<OutlineView
 										outline={state.outline}
-										currentOutlinePath={viewStats.outlinePath}
+										currentOutlinePath={
+											viewStats.outlinePath
+										}
 										onNavigate={props.onNavigate}
 										onOpenLink={props.onOpenLink}
 										onUpdate={props.onUpdateOutline}
 									/>
 								}
 							/>
-						}
-
+						)}
 					</div>
-					{state.sidebarOpen === true && <SidebarResizer onResize={props.onResizeSidebar}/>}
+					{state.sidebarOpen === true && (
+						<SidebarResizer onResize={props.onResizeSidebar} />
+					)}
 				</div>
 				<div className="split-view">
-					<View {...props} primary={true} state={state}/>
-					<SplitViewResizer onResize={props.onResizeSplitView}/>
-					{state.splitType && <View {...props} primary={false} state={state} />}
+					<View {...props} primary={true} state={state} />
+					<SplitViewResizer onResize={props.onResizeSplitView} />
+					{state.splitType && (
+						<View {...props} primary={false} state={state} />
+					)}
 				</div>
-				{state.contextMenu && <ContextMenu params={state.contextMenu} onClose={props.onCloseContextMenu}/>}
-				{state.labelPopup && <LabelPopup params={state.labelPopup} onUpdateAnnotations={props.onUpdateAnnotations} onClose={props.onCloseLabelPopup}/>}
-				{state.passwordPopup && <PasswordPopup params={state.passwordPopup} onEnterPassword={props.onEnterPassword}/>}
-				{state.printPopup && <PrintPopup params={state.printPopup}/>}
-				{state.errorMessage && <div className="error-bar" tabIndex={-1}>{state.errorMessage}</div>}
+				{state.contextMenu && (
+					<ContextMenu
+						params={state.contextMenu}
+						onClose={props.onCloseContextMenu}
+					/>
+				)}
+				{state.labelPopup && (
+					<LabelPopup
+						params={state.labelPopup}
+						onUpdateAnnotations={props.onUpdateAnnotations}
+						onClose={props.onCloseLabelPopup}
+					/>
+				)}
+				{state.passwordPopup && (
+					<PasswordPopup
+						params={state.passwordPopup}
+						onEnterPassword={props.onEnterPassword}
+					/>
+				)}
+				{state.printPopup && <PrintPopup params={state.printPopup} />}
+				{state.errorMessage && (
+					<div className="error-bar" tabIndex={-1}>
+						{state.errorMessage}
+					</div>
+				)}
 				{state.appearancePopup && (
 					// We always read the primaryViewState, but we write both view states
 					<AppearancePopup
@@ -246,7 +335,9 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onChangeSpreadMode={props.onChangeSpreadMode}
 						onChangeFlowMode={props.onChangeFlowMode}
 						onChangeAppearance={props.onChangeAppearance}
-						onChangeFocusModeEnabled={props.onChangeFocusModeEnabled}
+						onChangeFocusModeEnabled={
+							props.onChangeFocusModeEnabled
+						}
 						onAddTheme={props.onAddTheme}
 						onChangeTheme={props.onChangeTheme}
 						onOpenThemeContextMenu={props.onOpenThemeContextMenu}

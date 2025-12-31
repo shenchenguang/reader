@@ -275,6 +275,8 @@ class Reader {
 				entireWord: false,
 				result: null,
 			},
+			syncScrollEnabled: true,
+			showOriginalEnabled: true,
 		};
 
 		if (options.secondaryViewState) {
@@ -331,6 +333,7 @@ class Reader {
 		}
 
 		this._primaryView = this._createView(true, options.location);
+		this._setupSyncScroll();
 
 		if (selectAnnotationID) {
 			(async () => {
@@ -503,6 +506,12 @@ class Reader {
 						onDownloadOriginal={this._onDownloadOriginal}
 						translationActive={this._state.translationActive}
 						onChangeTextSelectionAnnotationMode={this.setTextSelectionAnnotationMode.bind(
+							this
+						)}
+						onToggleSyncScroll={this._handleToggleSyncScroll.bind(
+							this
+						)}
+						onToggleShowOriginal={this._handleToggleShowOriginal.bind(
 							this
 						)}
 						onCloseOverlayPopup={this._handleOverlayPopupClose.bind(
@@ -787,6 +796,7 @@ class Reader {
 					secondaryViewState: { ...this._state.primaryViewState },
 				});
 				this._secondaryView = this._createView(false);
+				this._setupSyncScroll();
 			}
 			// Unsplit
 			else if (
@@ -862,6 +872,7 @@ class Reader {
 	}
 
 	disableSplitView() {
+		this._cleanupSync?.();
 		this._updateState({ splitType: null });
 	}
 
@@ -1102,6 +1113,7 @@ class Reader {
 			this._secondaryView = null;
 			this._secondaryViewContainer.replaceChildren();
 			this._secondaryView = this._createView(false);
+			this._setupSyncScroll();
 		}
 	}
 
@@ -1536,6 +1548,60 @@ class Reader {
 		}
 
 		return view;
+	}
+
+	_setupSyncScroll() {
+		this._cleanupSync?.();
+
+		if (
+			!this._state.syncScrollEnabled ||
+			!this._primaryView ||
+			!this._secondaryView
+		)
+			return;
+
+		Promise.all([
+			this._primaryView.initializedPromise,
+			this._secondaryView.initializedPromise,
+		]).then(() => {
+			if (!this._primaryView || !this._secondaryView) return;
+
+			// Access internal viewerContainer directly
+			const c1 =
+				this._primaryView?._iframeWindow?.document.getElementById(
+					"viewerContainer"
+				);
+			const c2 =
+				this._secondaryView?._iframeWindow?.document.getElementById(
+					"viewerContainer"
+				);
+
+			if (!c1 || !c2) return;
+
+			const handleScroll = (e) => {
+				const source = e.target;
+				const target = source === c1 ? c2 : c1;
+
+				if (source._programmaticScroll) {
+					source._programmaticScroll = false;
+					return;
+				}
+
+				if (target) {
+					target._programmaticScroll = true;
+					target.scrollTop = source.scrollTop;
+					target.scrollLeft = source.scrollLeft;
+				}
+			};
+
+			c1.addEventListener("scroll", handleScroll);
+			c2.addEventListener("scroll", handleScroll);
+
+			this._cleanupSync = () => {
+				c1.removeEventListener("scroll", handleScroll);
+				c2.removeEventListener("scroll", handleScroll);
+			};
+		});
 	}
 
 	setErrorMessage(errorMessage) {
@@ -2471,6 +2537,26 @@ class Reader {
 	set flowMode(value) {
 		this._ensureType("epub");
 		this._lastView.setFlowMode(value);
+	}
+
+	_handleToggleSyncScroll(e) {
+		const enabled = e.target.checked;
+		this._updateState({ syncScrollEnabled: enabled });
+		if (enabled) {
+			this._setupSyncScroll();
+		} else {
+			this._cleanupSync?.();
+		}
+	}
+
+	_handleToggleShowOriginal(e) {
+		const enabled = e.target.checked;
+		this._updateState({ showOriginalEnabled: enabled });
+		if (enabled) {
+			document.body.classList.remove("disable-original-view");
+		} else {
+			document.body.classList.add("disable-original-view");
+		}
 	}
 }
 

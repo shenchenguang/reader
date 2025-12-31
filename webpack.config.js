@@ -1,36 +1,36 @@
-const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
-const { CleanWebpackPlugin } = require('clean-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const ZoteroLocalePlugin = require('./webpack.zotero-locale-plugin');
+const path = require("path");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
+const { CleanWebpackPlugin } = require("clean-webpack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
+const ZoteroLocalePlugin = require("./webpack.zotero-locale-plugin");
 
 function generateReaderConfig(build) {
 	let config = {
 		name: build,
-		mode: build === 'dev' ? 'development' : 'production',
-		devtool: (build === 'zotero' || build === 'web') ? false : 'source-map',
+		mode: build === "dev" ? "development" : "production",
+		devtool: build === "zotero" || build === "web" ? false : "source-map",
 		entry: {
 			reader: [
-				'./src/index.' + build + '.js',
-				'./src/common/stylesheets/main.scss'
-			]
+				"./src/index." + build + ".js",
+				"./src/common/stylesheets/main.scss",
+			],
 		},
 		output: {
-			path: path.resolve(__dirname, './build/' + build),
-			filename: 'reader.js',
-			libraryTarget: 'umd',
-			publicPath: '',
+			path: path.resolve(__dirname, "./build/" + build),
+			filename: "reader.js",
+			libraryTarget: "umd",
+			publicPath: "",
 			library: {
-				name: 'reader',
-				type: 'umd',
+				name: "reader",
+				type: "umd",
 				umdNamedDefine: true,
 			},
 		},
 		optimization: {
-			minimize: build === 'web',
-			minimizer: [new CssMinimizerPlugin(), '...'], // ... is for built-in TerserPlugin https://webpack.js.org/configuration/optimization/#optimizationminimizer
+			minimize: build === "web",
+			minimizer: [new CssMinimizerPlugin(), "..."], // ... is for built-in TerserPlugin https://webpack.js.org/configuration/optimization/#optimizationminimizer
 		},
 		module: {
 			rules: [
@@ -38,150 +38,162 @@ function generateReaderConfig(build) {
 					test: /\.(ts|js)x?$/,
 					exclude: /node_modules/,
 					use: {
-						loader: 'babel-loader',
+						loader: "babel-loader",
 						options: {
 							presets: [
-								['@babel/preset-env', {
-									useBuiltIns: false,
-									targets: build === 'zotero' || build === 'dev'
-										? { firefox: 115, chrome: 108 }
-										: undefined
-								}],
+								[
+									"@babel/preset-env",
+									{
+										useBuiltIns: false,
+										targets:
+											build === "zotero" ||
+											build === "dev"
+												? { firefox: 115, chrome: 108 }
+												: undefined,
+									},
+								],
 							],
 						},
 					},
 				},
-				build === 'dev' && {
+				build === "dev" && {
 					test: /\.tsx?$/,
 					exclude: /node_modules/,
-					use: 'ts-loader',
+					use: "ts-loader",
 				},
 				{
 					test: /\.s?css$/,
-					exclude: path.resolve(__dirname, './src/dom'),
+					exclude: path.resolve(__dirname, "./src/dom"),
 					use: [
 						MiniCssExtractPlugin.loader,
 						{
-							loader: 'css-loader',
+							loader: "css-loader",
 						},
 						{
-							loader: 'postcss-loader',
+							loader: "postcss-loader",
 						},
 						{
-							loader: 'sass-loader',
+							loader: "sass-loader",
 							options: {
-								additionalData: `$platform: '${build}';`
-							}
+								additionalData: `$platform: '${build}';`,
+							},
 						},
 					],
 				},
 				{
 					test: /\.scss$/,
-					include: path.resolve(__dirname, './src/dom'),
+					include: path.resolve(__dirname, "./src/dom"),
 					use: [
 						{
-							loader: 'raw-loader',
+							loader: "raw-loader",
 						},
 						{
-							loader: 'sass-loader',
+							loader: "sass-loader",
 							options: {
-								additionalData: `$platform: '${build}';`
-							}
-						}
-					]
+								additionalData: `$platform: '${build}';`,
+							},
+						},
+					],
 				},
 				{
 					test: /\.svg$/i,
 					issuer: /\.[jt]sx?$/,
-					use: ['@svgr/webpack'],
+					use: ["@svgr/webpack"],
 				},
 				{
 					test: /\.ftl$/,
-					type: 'asset/source'
-				}
-			].filter(Boolean)
+					type: "asset/source",
+				},
+			].filter(Boolean),
 		},
 		resolve: {
-			extensions: ['.js', '.ts', '.tsx'],
+			extensions: [".js", ".ts", ".tsx"],
 		},
 		plugins: [
 			new ZoteroLocalePlugin({
-				files: ['zotero.ftl', 'reader.ftl'],
-				locales: ['en-US'],
-				commitHash: '37f8c4d4f425244b5ead77bb7e129d828f62fb43',
+				files: ["zotero.ftl", "reader.ftl"],
+				locales: ["en-US"],
+				commitHash: "37f8c4d4f425244b5ead77bb7e129d828f62fb43",
 			}),
 			new CleanWebpackPlugin({
-				cleanOnceBeforeBuildPatterns: ['**/*', '!pdf/**']
+				cleanOnceBeforeBuildPatterns: ["**/*", "!pdf/**"],
 			}),
 			new MiniCssExtractPlugin({
-				filename: '[name].css',
+				filename: "[name].css",
 			}),
 			new HtmlWebpackPlugin({
-				template: './index.reader.html',
-				filename: './[name].html',
+				template: "./index.reader.html",
+				filename: "./[name].html",
 				templateParameters: {
-					build
+					build,
 				},
 			}),
 			new CopyWebpackPlugin({
 				patterns: [
 					{
-						from: 'node_modules/mathjax-full/ts/output/chtml/fonts/tex-woff-v2/*.woff',
-						to: './mathjax-fonts/[name].woff'
-					}
+						from: "node_modules/mathjax-full/ts/output/chtml/fonts/tex-woff-v2/*.woff",
+						to: "./mathjax-fonts/[name].woff",
+					},
 				],
 			}),
 		],
 	};
 
-	if (build === 'zotero') {
+	if (build === "zotero") {
 		config.externals = {
-			react: 'React',
-			'react-dom': 'ReactDOM',
-			'prop-types': 'PropTypes'
+			react: "React",
+			"react-dom": "ReactDOM",
+			"prop-types": "PropTypes",
 		};
 		config.plugins.push(
 			new CopyWebpackPlugin({
 				patterns: [
-					{ from: 'node_modules/react/umd/react.production.min.js', to: './react.js' },
-					{ from: 'node_modules/react-dom/umd/react-dom.production.min.js', to: './react-dom.js' },
-					{ from: 'src/static/react-intl.min.js', to: './react-intl.js' },
-					{ from: 'node_modules/prop-types/prop-types.js', to: './prop-types.js' }
+					{
+						from: "node_modules/react/umd/react.production.min.js",
+						to: "./react.js",
+					},
+					{
+						from: "node_modules/react-dom/umd/react-dom.production.min.js",
+						to: "./react-dom.js",
+					},
+					{
+						from: "src/static/react-intl.min.js",
+						to: "./react-intl.js",
+					},
+					{
+						from: "node_modules/prop-types/prop-types.js",
+						to: "./prop-types.js",
+					},
 				],
-				options: {
-
-				}
+				options: {},
 			})
 		);
-	}
-	else if (build === 'web') {
+	} else if (build === "web") {
 		config.externals = {
 			// No support for importing EPUB annotations on the web, so no need for luaparse there
-			luaparse: 'luaparse',
+			luaparse: "luaparse",
 		};
-	}
-	else if (build === 'dev') {
+	} else if (build === "dev") {
 		config.plugins.push(
 			new CopyWebpackPlugin({
 				patterns: [
-					{ from: 'demo/epub/demo.epub', to: './' },
-					{ from: 'demo/pdf/demo.pdf', to: './' },
-					{ from: 'demo/snapshot/demo.html', to: './' }
+					{ from: "demo/epub/demo.epub", to: "./" },
+					{ from: "demo/pdf/demo.pdf", to: "./" },
+					{ from: "demo/pdf/demo-translate.pdf", to: "./" },
+					{ from: "demo/snapshot/demo.html", to: "./" },
 				],
-				options: {
-
-				}
+				options: {},
 			})
 		);
 		config.devServer = {
 			static: {
-				directory: path.resolve(__dirname, 'build/'),
+				directory: path.resolve(__dirname, "build/"),
 				watch: true,
 			},
 			devMiddleware: {
 				writeToDisk: true,
 			},
-			open: '/dev/reader.html?type=pdf',
+			open: "/dev/reader.html?type=pdf",
 			port: 3000,
 		};
 	}
@@ -192,28 +204,28 @@ function generateReaderConfig(build) {
 function generateViewConfig(build) {
 	let config = {
 		name: build,
-		mode: build === 'view-dev' ? 'development' : 'production',
-		devtool: build === 'web' ? false : 'source-map',
+		mode: build === "view-dev" ? "development" : "production",
+		devtool: build === "web" ? false : "source-map",
 		entry: {
 			view: [
-				'./src/index.' + build + '.js',
-				'./src/common/stylesheets/view.scss'
+				"./src/index." + build + ".js",
+				"./src/common/stylesheets/view.scss",
 			],
 		},
 		output: {
-			path: path.resolve(__dirname, './build/' + build),
-			filename: 'view.js',
-			libraryTarget: 'umd',
-			publicPath: '',
+			path: path.resolve(__dirname, "./build/" + build),
+			filename: "view.js",
+			libraryTarget: "umd",
+			publicPath: "",
 			library: {
-				name: 'view',
-				type: 'umd',
+				name: "view",
+				type: "umd",
 				umdNamedDefine: true,
 			},
 		},
 		optimization: {
-			minimize: build === 'web',
-			minimizer: [new CssMinimizerPlugin(), '...'], // ... is for built-in TerserPlugin https://webpack.js.org/configuration/optimization/#optimizationminimizer
+			minimize: build === "web",
+			minimizer: [new CssMinimizerPlugin(), "..."], // ... is for built-in TerserPlugin https://webpack.js.org/configuration/optimization/#optimizationminimizer
 		},
 		module: {
 			rules: [
@@ -221,10 +233,10 @@ function generateViewConfig(build) {
 					test: /\.(js|jsx)$/,
 					exclude: /node_modules/,
 					use: {
-						loader: 'babel-loader',
+						loader: "babel-loader",
 						options: {
 							presets: [
-								['@babel/preset-env', { useBuiltIns: false }],
+								["@babel/preset-env", { useBuiltIns: false }],
 							],
 						},
 					},
@@ -233,88 +245,86 @@ function generateViewConfig(build) {
 					test: /\.tsx?$/,
 					exclude: /node_modules/,
 					use: {
-						loader: 'ts-loader',
+						loader: "ts-loader",
 						options: {
 							compilerOptions: {
-								target: 'ES2022'
-							}
-						}
+								target: "ES2022",
+							},
+						},
 					},
 				},
 				{
 					test: /\.s?css$/,
-					exclude: path.resolve(__dirname, './src/dom'),
+					exclude: path.resolve(__dirname, "./src/dom"),
 					use: [
 						MiniCssExtractPlugin.loader,
 						{
-							loader: 'css-loader',
+							loader: "css-loader",
 						},
 						{
-							loader: 'postcss-loader',
+							loader: "postcss-loader",
 						},
 						{
-							loader: 'sass-loader',
+							loader: "sass-loader",
 						},
-					]
+					],
 				},
 				{
 					test: /\.scss$/,
-					include: path.resolve(__dirname, './src/dom'),
+					include: path.resolve(__dirname, "./src/dom"),
 					use: [
 						{
-							loader: 'raw-loader',
+							loader: "raw-loader",
 						},
 						{
-							loader: 'sass-loader',
+							loader: "sass-loader",
 							options: {
-								additionalData: `$platform: '${build}';`
-							}
-						}
-					]
-				}
+								additionalData: `$platform: '${build}';`,
+							},
+						},
+					],
+				},
 			],
 		},
 		resolve: {
-			extensions: ['.js', '.ts', '.tsx']
+			extensions: [".js", ".ts", ".tsx"],
 		},
 		plugins: [
 			new CleanWebpackPlugin({
-				cleanOnceBeforeBuildPatterns: ['**/*', '!pdf/**']
+				cleanOnceBeforeBuildPatterns: ["**/*", "!pdf/**"],
 			}),
 			new MiniCssExtractPlugin({
-				filename: '[name].css',
+				filename: "[name].css",
 			}),
 			new HtmlWebpackPlugin({
-				template: './index.view.html',
-				filename: './[name].html',
+				template: "./index.view.html",
+				filename: "./[name].html",
 				templateParameters: {
-					build
+					build,
 				},
 			}),
 		],
 	};
 
-	if (build === 'view-dev') {
+	if (build === "view-dev") {
 		config.plugins.push(
 			new CopyWebpackPlugin({
 				patterns: [
-					{ from: 'demo/epub/demo.epub', to: './' },
-					{ from: 'demo/snapshot/demo.html', to: './' }
+					{ from: "demo/epub/demo.epub", to: "./" },
+					{ from: "demo/snapshot/demo.html", to: "./" },
 				],
-				options: {
-
-				}
+				options: {},
 			})
 		);
 		config.devServer = {
 			static: {
-				directory: path.resolve(__dirname, 'build/'),
+				directory: path.resolve(__dirname, "build/"),
 				watch: true,
 			},
 			devMiddleware: {
 				writeToDisk: true,
 			},
-			open: '/view-dev/view.html?type=snapshot',
+			open: "/view-dev/view.html?type=snapshot",
 			port: 3001,
 		};
 	}
@@ -323,10 +333,10 @@ function generateViewConfig(build) {
 }
 
 module.exports = [
-	generateReaderConfig('zotero'),
-	generateReaderConfig('web'),
-	generateReaderConfig('dev'),
-	generateViewConfig('ios'),
-	generateViewConfig('android'),
-	generateViewConfig('view-dev'),
+	generateReaderConfig("zotero"),
+	generateReaderConfig("web"),
+	generateReaderConfig("dev"),
+	generateViewConfig("ios"),
+	generateViewConfig("android"),
+	generateViewConfig("view-dev"),
 ];

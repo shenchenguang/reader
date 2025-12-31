@@ -231,18 +231,82 @@
 		}
 	}
 
+	.translation-button-group {
+		display: flex;
+		align-items: center;
+		background: transparent;
+		border-radius: 6px;
+		transition: all 0.2s ease;
+		color: var(--fill-secondary);
+
+		// Removed group-level hover to distinguish buttons
+
+		&.active {
+			background-color: transparent;
+			// For active state, only the icon should be blue based on reference
+
+			// &:hover {
+			// 	background-color: var(--fill-quinary);
+			// }
+
+			// Highlight the action button icon when active
+			.translation-action-button {
+				color: var(--color-text);
+
+				svg {
+					color: var(--color-accent) !important;
+					fill: currentColor;
+				}
+			}
+		}
+
+		button {
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			height: 28px;
+			color: inherit;
+			transition: background-color 0.2s ease, color 0.2s ease; // Added color transition
+
+			&:hover {
+				background-color: var(--fill-quinary);
+				color: var(--color-text);
+			}
+		}
+
+		.translation-action-button {
+			gap: 4px;
+			padding: 0 8px;
+			font-size: 13px;
+			font-weight: 500;
+			border-radius: 6px 0 0 6px;
+		}
+
+		.translation-menu-trigger {
+			padding: 0;
+			width: 20px;
+			border-radius: 0 6px 6px 0;
+			position: relative;
+			border-left: none;
+            // Removed vertical divider (::before)
+		}
+	}
+
 	.translation-dropdown-menu {
 		position: absolute;
 		top: calc(100% + 8px);
 		left: 0;
-		min-width: 220px;
+		min-width: 240px;
 		background: #fff;
 		border: var(--material-border);
-		border-radius: 10px;
+		border-radius: 12px;
 		box-shadow:
 			0 4px 18px rgba(15, 23, 42, 0.18),
 			0 1px 3px rgba(15, 23, 42, 0.15);
-		padding: 10px;
+		padding: 8px;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -288,6 +352,75 @@
 		width: 12px;
 		height: 12px;
 		color: var(--color-accent);
+	}
+
+	.translation-settings {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		padding-top: 4px;
+
+		.toggle-switch-label {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 6px 8px;
+			font-size: 13px;
+			color: var(--fill-primary);
+			cursor: pointer;
+			user-select: none;
+
+			> span {
+				flex: 1;
+			}
+		}
+
+		.toggle-switch {
+			position: relative;
+			width: 36px;
+			height: 20px;
+			flex-shrink: 0;
+
+			input[type="checkbox"] {
+				opacity: 0;
+				width: 0;
+				height: 0;
+				position: absolute;
+
+				&:checked + .toggle-slider {
+					background-color: #409eff;
+				}
+
+				&:checked + .toggle-slider::before {
+					transform: translateX(16px);
+				}
+			}
+
+			.toggle-slider {
+				position: absolute;
+				cursor: pointer;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: #e5e5ea;
+				border-radius: 10px;
+				transition: background-color 0.3s ease;
+
+				&::before {
+					content: "";
+					position: absolute;
+					height: 16px;
+					width: 16px;
+					left: 2px;
+					bottom: 2px;
+					background-color: white;
+					border-radius: 50%;
+					transition: transform 0.3s ease;
+					box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+				}
+			}
+		}
 	}
 
 	.translation-start-button {
@@ -371,7 +504,7 @@
 		position: absolute;
 		top: calc(100% + 8px);
 		right: 0;
-		background: var(--material-menu);
+		background: #fff;
 		border: var(--material-border);
 		border-radius: 10px;
 		box-shadow:

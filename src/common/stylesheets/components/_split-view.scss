@@ -59,3 +59,19 @@ body.enable-horizontal-split-view {
 		}
 	}
 }
+
+body.disable-original-view {
+	.primary-view {
+		display: none !important;
+	}
+
+	.secondary-view {
+		width: 100% !important;
+		flex-grow: 1 !important;
+		display: flex !important;
+	}
+
+	.split-view-resizer {
+		display: none !important;
+	}
+}

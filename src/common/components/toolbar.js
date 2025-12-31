@@ -201,10 +201,7 @@ function Toolbar(props) {
 		});
 	}
 
-	function handleTranslationButtonClick() {
-		if (!hasTranslation || props.translationLoading) {
-			return;
-		}
+	function handleTranslationAction() {
 		if (props.translationActive) {
 			const selectedService = selectedTranslationService
 				? translationServices.find(
@@ -215,14 +212,11 @@ function Toolbar(props) {
 			setIsTranslationMenuOpen(false);
 			return;
 		}
-		setIsTranslationMenuOpen((open) => {
-			let next = !open;
-			if (next) {
-				setIsToolPaletteOpen(false);
-				setIsDownloadMenuOpen(false);
-			}
-			return next;
-		});
+		handleStartTranslation();
+	}
+
+	function handleTranslationMenuToggle() {
+		setIsTranslationMenuOpen((prev) => !prev);
 	}
 
 	function handleStartTranslation() {
@@ -453,77 +447,140 @@ function Toolbar(props) {
 						})}
 						ref={translationDropdownRef}
 					>
-						<button
-							type="button"
-							className={cx("toolbar-button translation-toggle", {
-								active:
-									translationEngaged || isTranslationMenuOpen,
+						<div
+							className={cx("translation-dropdown", {
+								active: translationEngaged,
 							})}
-							tabIndex={-1}
-							onClick={handleTranslationButtonClick}
-							aria-haspopup={
-								!translationEngaged ? "menu" : undefined
-							}
-							aria-expanded={
-								!translationEngaged && isTranslationMenuOpen
-							}
+							ref={translationDropdownRef}
 						>
-							<IconTranslate />
-							<span>{translationLabel}</span>
-							{!translationEngaged && <IconChevronDown8 />}
-						</button>
-						{!translationEngaged && isTranslationMenuOpen && (
 							<div
-								className="translation-dropdown-menu"
-								role="menu"
+								className={cx("translation-button-group", {
+									active:
+										translationEngaged ||
+										isTranslationMenuOpen,
+								})}
 							>
-								<div className="translation-dropdown-label">
-									{l10n.getString(
-										"reader-translation-provider"
-									)}
-								</div>
-								<div className="translation-dropdown-options">
-									{translationServices.map((service) => (
-										<button
-											type="button"
-											key={service.key}
-											className={cx(
-												"translation-option",
-												{
-													active:
-														selectedTranslationService ===
-														service.key,
-												}
-											)}
-											onClick={() =>
-												handleSelectTranslationService(
-													service.key
-												)
-											}
-										>
-											<span>
-												{service.value ?? service.key}
-											</span>
-											{selectedTranslationService ===
-												service.key && (
-												<IconCheck12 className="translation-option-icon" />
-											)}
-										</button>
-									))}
-								</div>
 								<button
 									type="button"
-									className="translation-start-button"
-									onClick={handleStartTranslation}
-									disabled={
-										!selectedTranslationService ||
-										props.translationLoading
-									}
+									className="translation-action-button"
+									tabIndex={-1}
+									onClick={handleTranslationAction}
+									disabled={props.translationLoading}
 								>
-									{l10n.getString("reader-translation-start")}
+									<IconTranslate />
+									<span>{translationLabel}</span>
+								</button>
+								<button
+									type="button"
+									className="translation-menu-trigger"
+									tabIndex={-1}
+									onClick={handleTranslationMenuToggle}
+									aria-haspopup="menu"
+									aria-expanded={isTranslationMenuOpen}
+								>
+									<IconChevronDown8 />
 								</button>
 							</div>
-						)}
+							{isTranslationMenuOpen && (
+								<div
+									className="translation-dropdown-menu"
+									role="menu"
+								>
+									{!translationEngaged && (
+										<>
+											<div className="translation-dropdown-label">
+												{l10n.getString(
+													"reader-translation-provider"
+												)}
+											</div>
+											<div className="translation-dropdown-options">
+												{translationServices.map(
+													(service) => (
+														<button
+															type="button"
+															key={service.key}
+															className={cx(
+																"translation-option",
+																{
+																	active:
+																		selectedTranslationService ===
+																		service.key,
+																}
+															)}
+															onClick={() =>
+																handleSelectTranslationService(
+																	service.key
+																)
+															}
+														>
+															<span>
+																{service.value ??
+																	service.key}
+															</span>
+															{selectedTranslationService ===
+																service.key && (
+																<IconCheck12 className="translation-option-icon" />
+															)}
+														</button>
+													)
+												)}
+											</div>
+										</>
+									)}
+
+									<div className="translation-settings">
+										<label className="toggle-switch-label">
+											<span>跟随滚动</span>
+											<div className="toggle-switch">
+												<input
+													type="checkbox"
+													checked={
+														props.syncScrollEnabled ??
+														true
+													}
+													onChange={
+														props.onToggleSyncScroll
+													}
+												/>
+												<span className="toggle-slider"></span>
+											</div>
+										</label>
+										<label className="toggle-switch-label">
+											<span>展示原文</span>
+											<div className="toggle-switch">
+												<input
+													type="checkbox"
+													checked={
+														props.showOriginalEnabled ??
+														true
+													}
+													onChange={
+														props.onToggleShowOriginal
+													}
+												/>
+												<span className="toggle-slider"></span>
+											</div>
+										</label>
+									</div>
+
+									{!translationEngaged && (
+										<button
+											type="button"
+											className="translation-start-button"
+											onClick={handleStartTranslation}
+											disabled={
+												!selectedTranslationService ||
+												props.translationLoading
+											}
+										>
+											{l10n.getString(
+												"reader-translation-start"
+											)}
+										</button>
+									)}
+								</div>
+							)}
+						</div>
 					</div>
 				)}
 				{!props.readOnly && (
