@@ -73,11 +73,41 @@ function useDropdownAutoClose(ref, isOpen, onClose) {
 				onClose();
 			}
 		}
+		// 点击iframe内部也关闭下拉菜单
+		function handleIframeClick() {
+			onClose();
+		}
 		document.addEventListener("pointerdown", handlePointerDown);
 		document.addEventListener("keydown", handleKeydown);
+
+		// 获取所有iframe并监听其点击事件
+		const iframes = document.querySelectorAll("iframe");
+		const cleanupFns = [];
+		iframes.forEach((iframe) => {
+			try {
+				const iframeDoc =
+					iframe.contentDocument || iframe.contentWindow?.document;
+				if (iframeDoc) {
+					iframeDoc.addEventListener(
+						"pointerdown",
+						handleIframeClick
+					);
+					cleanupFns.push(() => {
+						iframeDoc.removeEventListener(
+							"pointerdown",
+							handleIframeClick
+						);
+					});
+				}
+			} catch (e) {
+				// 跨域iframe无法访问，忽略
+			}
+		});
+
 		return () => {
 			document.removeEventListener("pointerdown", handlePointerDown);
 			document.removeEventListener("keydown", handleKeydown);
+			cleanupFns.forEach((fn) => fn());
 		};
 	}, [isOpen, onClose, ref]);
 }
@@ -448,139 +478,131 @@ function Toolbar(props) {
 						ref={translationDropdownRef}
 					>
 						<div
-							className={cx("translation-dropdown", {
-								active: translationEngaged,
+							className={cx("translation-button-group", {
+								active:
+									translationEngaged || isTranslationMenuOpen,
 							})}
-							ref={translationDropdownRef}
 						>
-							<div
-								className={cx("translation-button-group", {
-									active:
-										translationEngaged ||
-										isTranslationMenuOpen,
-								})}
+							<button
+								type="button"
+								className="translation-action-button"
+								tabIndex={-1}
+								onClick={handleTranslationAction}
+								disabled={props.translationLoading}
 							>
-								<button
-									type="button"
-									className="translation-action-button"
-									tabIndex={-1}
-									onClick={handleTranslationAction}
-									disabled={props.translationLoading}
-								>
-									<IconTranslate />
-									<span>{translationLabel}</span>
-								</button>
-								<button
-									type="button"
-									className="translation-menu-trigger"
-									tabIndex={-1}
-									onClick={handleTranslationMenuToggle}
-									aria-haspopup="menu"
-									aria-expanded={isTranslationMenuOpen}
-								>
-									<IconChevronDown8 />
-								</button>
-							</div>
-							{isTranslationMenuOpen && (
-								<div
-									className="translation-dropdown-menu"
-									role="menu"
-								>
-									{!translationEngaged && (
-										<>
-											<div className="translation-dropdown-label">
-												{l10n.getString(
-													"reader-translation-provider"
-												)}
-											</div>
-											<div className="translation-dropdown-options">
-												{translationServices.map(
-													(service) => (
-														<button
-															type="button"
-															key={service.key}
-															className={cx(
-																"translation-option",
-																{
-																	active:
-																		selectedTranslationService ===
-																		service.key,
-																}
-															)}
-															onClick={() =>
-																handleSelectTranslationService(
-																	service.key
-																)
-															}
-														>
-															<span>
-																{service.value ??
-																	service.key}
-															</span>
-															{selectedTranslationService ===
-																service.key && (
-																<IconCheck12 className="translation-option-icon" />
-															)}
-														</button>
-													)
-												)}
-											</div>
-										</>
-									)}
-
-									<div className="translation-settings">
-										<label className="toggle-switch-label">
-											<span>跟随滚动</span>
-											<div className="toggle-switch">
-												<input
-													type="checkbox"
-													checked={
-														props.syncScrollEnabled ??
-														true
-													}
-													onChange={
-														props.onToggleSyncScroll
-													}
-												/>
-												<span className="toggle-slider"></span>
-											</div>
-										</label>
-										<label className="toggle-switch-label">
-											<span>展示原文</span>
-											<div className="toggle-switch">
-												<input
-													type="checkbox"
-													checked={
-														props.showOriginalEnabled ??
-														true
-													}
-													onChange={
-														props.onToggleShowOriginal
-													}
-												/>
-												<span className="toggle-slider"></span>
-											</div>
-										</label>
-									</div>
-
-									{!translationEngaged && (
-										<button
-											type="button"
-											className="translation-start-button"
-											onClick={handleStartTranslation}
-											disabled={
-												!selectedTranslationService ||
-												props.translationLoading
-											}
-										>
-											{l10n.getString(
-												"reader-translation-start"
-											)}
-										</button>
-									)}
-								</div>
-							)}
+								<IconTranslate />
+								<span>{translationLabel}</span>
+							</button>
+							<button
+								type="button"
+								className="translation-menu-trigger"
+								tabIndex={-1}
+								onClick={handleTranslationMenuToggle}
+								aria-haspopup="menu"
+								aria-expanded={isTranslationMenuOpen}
+							>
+								<IconChevronDown8 />
+							</button>
 						</div>
+						{isTranslationMenuOpen && (
+							<div
+								className="translation-dropdown-menu"
+								role="menu"
+							>
+								{!translationEngaged && (
+									<>
+										<div className="translation-dropdown-label">
+											{l10n.getString(
+												"reader-translation-provider"
+											)}
+										</div>
+										<div className="translation-dropdown-options">
+											{translationServices.map(
+												(service) => (
+													<button
+														type="button"
+														key={service.key}
+														className={cx(
+															"translation-option",
+															{
+																active:
+																	selectedTranslationService ===
+																	service.key,
+															}
+														)}
+														onClick={() =>
+															handleSelectTranslationService(
+																service.key
+															)
+														}
+													>
+														<span>
+															{service.value ??
+																service.key}
+														</span>
+														{selectedTranslationService ===
+															service.key && (
+															<IconCheck12 className="translation-option-icon" />
+														)}
+													</button>
+												)
+											)}
+										</div>
+									</>
+								)}
+
+								<div className="translation-settings">
+									<label className="toggle-switch-label">
+										<span>跟随滚动</span>
+										<div className="toggle-switch">
+											<input
+												type="checkbox"
+												checked={
+													props.syncScrollEnabled ??
+													true
+												}
+												onChange={
+													props.onToggleSyncScroll
+												}
+											/>
+											<span className="toggle-slider"></span>
+										</div>
+									</label>
+									<label className="toggle-switch-label">
+										<span>展示原文</span>
+										<div className="toggle-switch">
+											<input
+												type="checkbox"
+												checked={
+													props.showOriginalEnabled ??
+													true
+												}
+												onChange={
+													props.onToggleShowOriginal
+												}
+											/>
+											<span className="toggle-slider"></span>
+										</div>
+									</label>
+								</div>
+
+								{!translationEngaged && (
+									<button
+										type="button"
+										className="translation-start-button"
+										onClick={handleStartTranslation}
+										disabled={
+											!selectedTranslationService ||
+											props.translationLoading
+										}
+									>
+										{l10n.getString(
+											"reader-translation-start"
+										)}
+									</button>
+								)}
+							</div>
+						)}
 					</div>
 				)}
 				{!props.readOnly && (

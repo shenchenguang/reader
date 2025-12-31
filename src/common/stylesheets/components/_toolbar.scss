@@ -373,6 +373,15 @@
 			> span {
 				flex: 1;
 			}
+
+			&.disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+
+				.toggle-switch {
+					pointer-events: none;
+				}
+			}
 		}
 
 		.toggle-switch {

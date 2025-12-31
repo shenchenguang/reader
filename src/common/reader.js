@@ -1092,7 +1092,15 @@ class Reader {
 		}
 		this._updateState(update);
 
+		// 翻译激活时，根据预设的showOriginalEnabled状态应用CSS class
+		if (active && !wasTranslationActive) {
+			if (this._state.showOriginalEnabled === false) {
+				document.body.classList.add("disable-original-view");
+			}
+		}
+		// 翻译关闭时，移除隐藏原文的class
 		if (!active && wasTranslationActive) {
+			document.body.classList.remove("disable-original-view");
 			let zoomState = this._preTranslationZoomState;
 			if (zoomState && this._primaryView?.setZoomState) {
 				this._primaryView.initializedPromise?.then(() => {
@@ -2552,10 +2560,13 @@ class Reader {
 	_handleToggleShowOriginal(e) {
 		const enabled = e.target.checked;
 		this._updateState({ showOriginalEnabled: enabled });
-		if (enabled) {
-			document.body.classList.remove("disable-original-view");
-		} else {
-			document.body.classList.add("disable-original-view");
+		// 只在翻译激活时才实际控制原文显示/隐藏
+		if (this._state.translationActive) {
+			if (enabled) {
+				document.body.classList.remove("disable-original-view");
+			} else {
+				document.body.classList.add("disable-original-view");
+			}
 		}
 	}
 }
