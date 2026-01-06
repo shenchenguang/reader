@@ -163,6 +163,22 @@ function Toolbar(props) {
 			) {
 				return prev;
 			}
+			// Try loading from localStorage
+			try {
+				const savedServiceId = localStorage.getItem(
+					"reader-translation-service-id"
+				);
+				if (
+					savedServiceId &&
+					translationServices.some(
+						(service) => service.key === savedServiceId
+					)
+				) {
+					return savedServiceId;
+				}
+			} catch (e) {
+				// Ignore localStorage errors
+			}
 			return translationServices[0]?.key || null;
 		});
 	}, [hasTranslation, props.translateList]);
@@ -271,6 +287,11 @@ function Toolbar(props) {
 
 	function handleSelectTranslationService(serviceKey) {
 		setSelectedTranslationService(serviceKey);
+		try {
+			localStorage.setItem("reader-translation-service-id", serviceKey);
+		} catch (e) {
+			// Ignore localStorage errors
+		}
 	}
 
 	function handleDownloadMenuToggle() {
@@ -485,7 +506,9 @@ function Toolbar(props) {
 						>
 							<button
 								type="button"
-								className="translation-action-button"
+								className={cx("translation-action-button", {
+									single: translationEngaged,
+								})}
 								tabIndex={-1}
 								onClick={handleTranslationAction}
 								disabled={props.translationLoading}
@@ -493,16 +516,18 @@ function Toolbar(props) {
 								<IconTranslate />
 								<span>{translationLabel}</span>
 							</button>
-							<button
-								type="button"
-								className="translation-menu-trigger"
-								tabIndex={-1}
-								onClick={handleTranslationMenuToggle}
-								aria-haspopup="menu"
-								aria-expanded={isTranslationMenuOpen}
-							>
-								<IconChevronDown8 />
-							</button>
+							{!translationEngaged && (
+								<button
+									type="button"
+									className="translation-menu-trigger"
+									tabIndex={-1}
+									onClick={handleTranslationMenuToggle}
+									aria-haspopup="menu"
+									aria-expanded={isTranslationMenuOpen}
+								>
+									<IconChevronDown8 />
+								</button>
+							)}
 						</div>
 						{isTranslationMenuOpen && (
 							<div
@@ -550,41 +575,6 @@ function Toolbar(props) {
 										</div>
 									</>
 								)}
-
-								<div className="translation-settings">
-									<label className="toggle-switch-label">
-										<span>跟随滚动</span>
-										<div className="toggle-switch">
-											<input
-												type="checkbox"
-												checked={
-													props.syncScrollEnabled ??
-													true
-												}
-												onChange={
-													props.onToggleSyncScroll
-												}
-											/>
-											<span className="toggle-slider"></span>
-										</div>
-									</label>
-									<label className="toggle-switch-label">
-										<span>展示原文</span>
-										<div className="toggle-switch">
-											<input
-												type="checkbox"
-												checked={
-													props.showOriginalEnabled ??
-													true
-												}
-												onChange={
-													props.onToggleShowOriginal
-												}
-											/>
-											<span className="toggle-slider"></span>
-										</div>
-									</label>
-								</div>
 
 								{!translationEngaged && (
 									<button
@@ -740,6 +730,32 @@ function Toolbar(props) {
 				</div>
 			</div>
 			<div className="end">
+				{props.translationActive && (
+					<div className="translation-settings toolbar-item">
+						<label className="toggle-switch-label">
+							<span>跟随滚动</span>
+							<div className="toggle-switch">
+								<input
+									type="checkbox"
+									checked={props.syncScrollEnabled ?? true}
+									onChange={props.onToggleSyncScroll}
+								/>
+								<span className="toggle-slider"></span>
+							</div>
+						</label>
+						<label className="toggle-switch-label">
+							<span>展示原文</span>
+							<div className="toggle-switch">
+								<input
+									type="checkbox"
+									checked={props.showOriginalEnabled ?? true}
+									onChange={props.onToggleShowOriginal}
+								/>
+								<span className="toggle-slider"></span>
+							</div>
+						</label>
+					</div>
+				)}
 				<CustomSections type="Toolbar" />
 				<button
 					className={cx("toolbar-button find", {
