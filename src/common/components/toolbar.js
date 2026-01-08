@@ -732,17 +732,21 @@ function Toolbar(props) {
 			<div className="end">
 				{props.translationActive && (
 					<div className="translation-settings toolbar-item">
-						<label className="toggle-switch-label">
-							<span>跟随滚动</span>
-							<div className="toggle-switch">
-								<input
-									type="checkbox"
-									checked={props.syncScrollEnabled ?? true}
-									onChange={props.onToggleSyncScroll}
-								/>
-								<span className="toggle-slider"></span>
-							</div>
-						</label>
+						{(props.showOriginalEnabled ?? true) && (
+							<label className="toggle-switch-label">
+								<span>跟随滚动</span>
+								<div className="toggle-switch">
+									<input
+										type="checkbox"
+										checked={
+											props.syncScrollEnabled ?? true
+										}
+										onChange={props.onToggleSyncScroll}
+									/>
+									<span className="toggle-slider"></span>
+								</div>
+							</label>
+						)}
 						<label className="toggle-switch-label">
 							<span>展示原文</span>
 							<div className="toggle-switch">
