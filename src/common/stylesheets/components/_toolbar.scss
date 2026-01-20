@@ -127,14 +127,32 @@
 	}
 }
 
-	.sidebar-dropdown {
-		position: relative;
+// 侧边栏控制按钮组
+.sidebar-controls {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
 
-	.sidebar-toggle {
-		width: 48px;
-		gap: 6px;
-		justify-content: center;
+// 侧边栏显示/隐藏按钮
+.sidebar-icon-button {
+	width: 28px;
+
+	// 去掉active状态的背景色
+	&.active, &:active {
+		background-color: transparent;
 	}
+}
+
+// 菜单下拉触发按钮
+.sidebar-menu-trigger {
+	width: 20px;
+	min-width: 20px;
+	padding: 0;
+}
+
+.sidebar-dropdown {
+	position: relative;
 
 	.sidebar-dropdown-chevron {
 		transition: transform 150ms ease;
@@ -147,7 +165,7 @@
 	.sidebar-dropdown-menu {
 		position: absolute;
 		top: calc(100% + 8px);
-		left: 0;
+		left: -28px; // 向左偏移以对齐icon按钮
 		display: flex;
 		flex-direction: column;
 		min-width: 176px;

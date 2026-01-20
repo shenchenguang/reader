@@ -231,7 +231,7 @@ class Reader {
 				options.sidebarOpen !== undefined ? options.sidebarOpen : true,
 			sidebarWidth:
 				options.sidebarWidth !== undefined ? options.sidebarWidth : 240,
-			sidebarView: "annotations",
+			sidebarView: "thumbnails",
 			contextPaneOpen:
 				options.contextPaneOpen !== undefined
 					? options.contextPaneOpen

@@ -221,15 +221,24 @@ function Toolbar(props) {
 
 	function handleSidebarOptionSelect(option) {
 		setIsSidebarDropdownOpen(false);
-		if (option === "hidden") {
-			props.onToggleSidebar(!props.sidebarOpen);
-			return;
-		}
 		if (!props.sidebarOpen) {
 			props.onToggleSidebar(true);
 		}
 		if (props.sidebarView !== option) {
 			props.onChangeSidebarView(option);
+		}
+	}
+
+	function handleToggleSidebar() {
+		if (props.sidebarOpen) {
+			// 关闭侧边栏
+			props.onToggleSidebar(false);
+		} else {
+			// 打开侧边栏并切换到缩略图视图
+			props.onToggleSidebar(true);
+			if (props.type === "pdf" && props.sidebarView !== "thumbnails") {
+				props.onChangeSidebarView("thumbnails");
+			}
 		}
 	}
 
@@ -318,18 +327,15 @@ function Toolbar(props) {
 		}
 	}
 
-	const hiddenSidebarLabel = props.sidebarOpen
-		? l10n.getString("reader-hide-sidebar")
-		: l10n.getString("reader-show-sidebar");
-	const sidebarSelection = props.sidebarOpen ? props.sidebarView : "hidden";
+	const sidebarSelection = props.sidebarView;
+	// 菜单顺序：缩略图、批注、大纲
 	const sidebarOptions = [
-		{ id: "hidden", label: hiddenSidebarLabel },
 		props.type === "pdf" && {
 			id: "thumbnails",
 			label: l10n.getString("reader-thumbnails"),
 		},
-		{ id: "outline", label: l10n.getString("reader-outline") },
 		{ id: "annotations", label: l10n.getString("reader-annotations") },
+		{ id: "outline", label: l10n.getString("reader-outline") },
 	].filter(Boolean);
 
 	const filteredToolOptions = TOOL_OPTIONS.filter(
@@ -352,51 +358,59 @@ function Toolbar(props) {
 	return (
 		<div className="toolbar" data-tabstop={1} role="application">
 			<div className="start">
-				<div className="sidebar-dropdown" ref={sidebarDropdownRef}>
+				<div className="sidebar-controls">
+					{/* 侧边栏显示/隐藏按钮 */}
 					<button
 						type="button"
 						id="sidebarToggle"
-						className={cx("toolbar-button sidebar-toggle", {
-							active: isSidebarDropdownOpen,
+						className={cx("toolbar-button sidebar-icon-button", {
+							active: props.sidebarOpen,
 						})}
 						title={l10n.getString("reader-toggle-sidebar")}
 						tabIndex={-1}
-						onClick={handleSidebarDropdownToggle}
-						aria-haspopup="menu"
-						aria-expanded={isSidebarDropdownOpen}
+						onClick={handleToggleSidebar}
 					>
 						<IconSidebar />
-						<IconChevronDown8
-							className={cx("sidebar-dropdown-chevron", {
-								open: isSidebarDropdownOpen,
-							})}
-						/>
 					</button>
-					{isSidebarDropdownOpen && (
-						<div className="sidebar-dropdown-menu" role="menu">
-							{sidebarOptions.map((option) => (
-								<button
-									type="button"
-									role="menuitemradio"
-									key={option.id}
-									className={cx("sidebar-dropdown-option", {
-										active: sidebarSelection === option.id,
-									})}
-									onClick={() =>
-										handleSidebarOptionSelect(option.id)
-									}
-									aria-checked={
-										sidebarSelection === option.id
-									}
-								>
-									<span>{option.label}</span>
-									{sidebarSelection === option.id && (
-										<IconCheck12 className="sidebar-dropdown-option-icon" />
-									)}
-								</button>
-							))}
-						</div>
-					)}
+					{/* 菜单下拉按钮 */}
+					<div className="sidebar-dropdown" ref={sidebarDropdownRef}>
+						<button
+							type="button"
+							className={cx(
+								"toolbar-button sidebar-menu-trigger",
+								{
+									active: isSidebarDropdownOpen,
+								}
+							)}
+							tabIndex={-1}
+							onClick={handleSidebarDropdownToggle}
+							aria-haspopup="menu"
+							aria-expanded={isSidebarDropdownOpen}
+						>
+							<IconChevronDown8
+								className={cx("sidebar-dropdown-chevron", {
+									open: isSidebarDropdownOpen,
+								})}
+							/>
+						</button>
+						{isSidebarDropdownOpen && (
+							<div className="sidebar-dropdown-menu" role="menu">
+								{sidebarOptions.map((option) => (
+									<button
+										type="button"
+										role="menuitem"
+										key={option.id}
+										className="sidebar-dropdown-option"
+										onClick={() =>
+											handleSidebarOptionSelect(option.id)
+										}
+									>
+										<span>{option.label}</span>
+									</button>
+								))}
+							</div>
+						)}
+					</div>
 				</div>
 				{/* <button
 					id="navigateBack"
