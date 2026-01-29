@@ -90,12 +90,12 @@ function useDropdownAutoClose(ref, isOpen, onClose) {
 				if (iframeDoc) {
 					iframeDoc.addEventListener(
 						"pointerdown",
-						handleIframeClick
+						handleIframeClick,
 					);
 					cleanupFns.push(() => {
 						iframeDoc.removeEventListener(
 							"pointerdown",
-							handleIframeClick
+							handleIframeClick,
 						);
 					});
 				}
@@ -130,24 +130,44 @@ function Toolbar(props) {
 		props.isEnglishDocument !== false &&
 		translationServices.length > 0 &&
 		props.showTranslationControls;
+	function getBestDefaultService() {
+		try {
+			const savedServiceId = localStorage.getItem(
+				"reader-translation-service-id",
+			);
+			if (
+				savedServiceId &&
+				translationServices.some(
+					(service) => service.key === savedServiceId,
+				)
+			) {
+				return savedServiceId;
+			}
+		} catch (e) {}
+		if (translationServices.some((service) => service.key === "agean")) {
+			return "agean";
+		}
+		return translationServices[0]?.key || null;
+	}
+
 	const [selectedTranslationService, setSelectedTranslationService] =
-		useState(() => translationServices[0]?.key || null);
+		useState(getBestDefaultService);
 	const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 	const { platform } = useContext(ReaderContext);
 
 	const { l10n } = useLocalization();
 
 	useDropdownAutoClose(sidebarDropdownRef, isSidebarDropdownOpen, () =>
-		setIsSidebarDropdownOpen(false)
+		setIsSidebarDropdownOpen(false),
 	);
 	useDropdownAutoClose(toolDropdownRef, isToolPaletteOpen, () =>
-		setIsToolPaletteOpen(false)
+		setIsToolPaletteOpen(false),
 	);
 	useDropdownAutoClose(translationDropdownRef, isTranslationMenuOpen, () =>
-		setIsTranslationMenuOpen(false)
+		setIsTranslationMenuOpen(false),
 	);
 	useDropdownAutoClose(downloadDropdownRef, isDownloadMenuOpen, () =>
-		setIsDownloadMenuOpen(false)
+		setIsDownloadMenuOpen(false),
 	);
 
 	useEffect(() => {
@@ -163,23 +183,7 @@ function Toolbar(props) {
 			) {
 				return prev;
 			}
-			// Try loading from localStorage
-			try {
-				const savedServiceId = localStorage.getItem(
-					"reader-translation-service-id"
-				);
-				if (
-					savedServiceId &&
-					translationServices.some(
-						(service) => service.key === savedServiceId
-					)
-				) {
-					return savedServiceId;
-				}
-			} catch (e) {
-				// Ignore localStorage errors
-			}
-			return translationServices[0]?.key || null;
+			return getBestDefaultService();
 		});
 	}, [hasTranslation, props.translateList]);
 
@@ -260,8 +264,8 @@ function Toolbar(props) {
 		if (props.translationActive) {
 			const selectedService = selectedTranslationService
 				? translationServices.find(
-						(service) => service.key === selectedTranslationService
-				  ) || { key: selectedTranslationService }
+						(service) => service.key === selectedTranslationService,
+					) || { key: selectedTranslationService }
 				: null;
 			props.onStopTranslation?.(selectedService);
 			setIsTranslationMenuOpen(false);
@@ -283,7 +287,7 @@ function Toolbar(props) {
 			return;
 		}
 		let selectedItem = translationServices.find(
-			(service) => service.key === selectedTranslationService
+			(service) => service.key === selectedTranslationService,
 		);
 		if (!selectedItem) {
 			return;
@@ -339,7 +343,7 @@ function Toolbar(props) {
 	].filter(Boolean);
 
 	const filteredToolOptions = TOOL_OPTIONS.filter(
-		(option) => !(option.pdfOnly && props.type !== "pdf")
+		(option) => !(option.pdfOnly && props.type !== "pdf"),
 	);
 	const displayToolType =
 		props.tool.type === "eraser" ? "ink" : props.tool.type;
@@ -352,8 +356,8 @@ function Toolbar(props) {
 	const translationLabel = props.translationLoading
 		? l10n.getString("reader-translation-loading")
 		: props.translationActive
-		? l10n.getString("reader-translation-stop")
-		: l10n.getString("reader-translation-full");
+			? l10n.getString("reader-translation-stop")
+			: l10n.getString("reader-translation-full");
 
 	return (
 		<div className="toolbar" data-tabstop={1} role="application">
@@ -380,7 +384,7 @@ function Toolbar(props) {
 								"toolbar-button sidebar-menu-trigger",
 								{
 									active: isSidebarDropdownOpen,
-								}
+								},
 							)}
 							tabIndex={-1}
 							onClick={handleSidebarDropdownToggle}
@@ -552,7 +556,7 @@ function Toolbar(props) {
 									<>
 										<div className="translation-dropdown-label">
 											{l10n.getString(
-												"reader-translation-provider"
+												"reader-translation-provider",
 											)}
 										</div>
 										<div className="translation-dropdown-options">
@@ -567,11 +571,11 @@ function Toolbar(props) {
 																active:
 																	selectedTranslationService ===
 																	service.key,
-															}
+															},
 														)}
 														onClick={() =>
 															handleSelectTranslationService(
-																service.key
+																service.key,
 															)
 														}
 													>
@@ -584,7 +588,7 @@ function Toolbar(props) {
 															<IconCheck12 className="translation-option-icon" />
 														)}
 													</button>
-												)
+												),
 											)}
 										</div>
 									</>
@@ -601,7 +605,7 @@ function Toolbar(props) {
 										}
 									>
 										{l10n.getString(
-											"reader-translation-start"
+											"reader-translation-start",
 										)}
 									</button>
 								)}
@@ -649,7 +653,7 @@ function Toolbar(props) {
 														active:
 															displayToolType ===
 															option.type,
-													}
+													},
 												)}
 												disabled={props.readOnly}
 												onClick={() =>
@@ -667,11 +671,11 @@ function Toolbar(props) {
 										disabled={
 											props.readOnly ||
 											["pointer", "hand"].includes(
-												props.tool.type
+												props.tool.type,
 											)
 										}
 										title={l10n.getString(
-											"reader-pick-color"
+											"reader-pick-color",
 										)}
 										onClick={handleToolColorClick}
 									>
@@ -685,7 +689,7 @@ function Toolbar(props) {
 														"pointer",
 														"hand",
 													].includes(
-														props.tool.type
+														props.tool.type,
 													) &&
 														"transparent")
 												}
