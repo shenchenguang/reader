@@ -1402,7 +1402,10 @@ class PDFView {
 			if (!this._isTranslationView) {
 				this._onSetSelectionPopup();
 			}
-			this._iframeWindow.getSelection().removeAllRanges();
+			// 避免在 textAnnotation 正在被聚焦时清除选区，以免干扰焦点状态
+			if (!this._textAnnotationFocused()) {
+				this._iframeWindow.getSelection().removeAllRanges();
+			}
 		}
 	}
 
