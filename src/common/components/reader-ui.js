@@ -68,7 +68,7 @@ function View(props) {
 				state.annotations.find(
 					(x) =>
 						x.id ===
-						state[name + "ViewAnnotationPopup"].annotation.id
+						state[name + "ViewAnnotationPopup"].annotation.id,
 				) && (
 					<AnnotationPopup
 						type={props.type}
@@ -78,7 +78,7 @@ function View(props) {
 							(x) =>
 								x.id ===
 								state[name + "ViewAnnotationPopup"].annotation
-									.id
+									.id,
 						)}
 						onChange={(annotation) =>
 							props.onUpdateAnnotations([annotation])
@@ -190,6 +190,7 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onToggleFind={props.onToggleFind}
 						onToggleContextPane={props.onToggleContextPane}
 						translateList={props.translateList}
+						defaultTranslateKey={props.defaultTranslateKey}
 						showTranslationControls={
 							state.translationControlsVisible
 						}

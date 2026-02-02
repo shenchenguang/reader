@@ -144,8 +144,13 @@ function Toolbar(props) {
 				return savedServiceId;
 			}
 		} catch (e) {}
-		if (translationServices.some((service) => service.key === "agean")) {
-			return "agean";
+		if (
+			props.defaultTranslateKey &&
+			translationServices.some(
+				(service) => service.key === props.defaultTranslateKey,
+			)
+		) {
+			return props.defaultTranslateKey;
 		}
 		return translationServices[0]?.key || null;
 	}

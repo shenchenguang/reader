@@ -92,6 +92,7 @@ class Reader {
 		this._translateList = Array.isArray(options.translateList)
 			? options.translateList
 			: [];
+		this._defaultTranslateKey = options.defaultTranslateKey;
 		this._onStartTranslation = options.onStartTranslation;
 		this._onStopTranslation = options.onStopTranslation;
 		this._onDownloadTranslation = options.onDownloadTranslation;
@@ -111,7 +112,7 @@ class Reader {
 		this._preTranslationZoomState = null;
 
 		this.initializedPromise = new Promise(
-			(resolve) => (this._resolveInitializedPromise = resolve)
+			(resolve) => (this._resolveInitializedPromise = resolve),
 		);
 
 		this._splitViewContainer = document.getElementById("split-view");
@@ -325,7 +326,7 @@ class Reader {
 		if (
 			options.location?.annotationID &&
 			options.annotations.find(
-				(x) => x.id === options.location.annotationID
+				(x) => x.id === options.location.annotationID,
 			)
 		) {
 			selectAnnotationID = options.location.annotationID;
@@ -351,24 +352,24 @@ class Reader {
 						ref={this._readerRef}
 						tools={this._tools}
 						onSelectAnnotations={this.setSelectedAnnotations.bind(
-							this
+							this,
 						)}
 						onZoomIn={this.zoomIn.bind(this)}
 						onZoomOut={this.zoomOut.bind(this)}
 						onZoomReset={this.zoomReset.bind(this)}
 						onNavigateBack={this.navigateBack.bind(this)}
 						onNavigateToPreviousPage={this.navigateToPreviousPage.bind(
-							this
+							this,
 						)}
 						onNavigateToNextPage={this.navigateToNextPage.bind(
-							this
+							this,
 						)}
 						onChangePageNumber={(pageNumber) =>
 							this._lastView.navigate({ pageNumber })
 						}
 						onChangeTool={this.setTool.bind(this)}
 						onToggleAppearancePopup={this.toggleAppearancePopup.bind(
-							this
+							this,
 						)}
 						onToggleFind={this.toggleFindPopup.bind(this)}
 						onChangeFilter={this.setFilter.bind(this)}
@@ -384,7 +385,7 @@ class Reader {
 						onChangeTheme={(theme) => {
 							if (
 								getCurrentColorScheme(
-									this._state.colorScheme
+									this._state.colorScheme,
 								) === "dark"
 							) {
 								// For Zotero client use prefs to change theme
@@ -405,16 +406,16 @@ class Reader {
 						onAddAnnotation={(annotation, select) => {
 							annotation =
 								this._annotationManager.addAnnotation(
-									annotation
+									annotation,
 								);
 							// Tell screen readers the annotation was added after focus is settled
 							setTimeout(() => {
 								let annotationType = getLocalizedString(
-									`reader-${annotation.type}-annotation`
+									`reader-${annotation.type}-annotation`,
 								);
 								let msg = getLocalizedString(
 									"reader-a11y-annotation-created",
-									{ type: annotationType }
+									{ type: annotationType },
 								);
 								this.setA11yMessage(msg);
 							}, 100);
@@ -426,40 +427,40 @@ class Reader {
 						}}
 						onUpdateAnnotations={(annotations) => {
 							this._annotationManager.updateAnnotations(
-								annotations
+								annotations,
 							);
 							this._enableAnnotationDeletionFromComment = false;
 						}}
 						onDeleteAnnotations={this._annotationManager.deleteAnnotations.bind(
-							this._annotationManager
+							this._annotationManager,
 						)}
 						onOpenTagsPopup={this._onOpenTagsPopup}
 						onOpenPageLabelPopup={this._handleOpenPageLabelPopup.bind(
-							this
+							this,
 						)}
 						onOpenColorContextMenu={(params) =>
 							this._onOpenContextMenu(
-								createColorContextMenu(this, params)
+								createColorContextMenu(this, params),
 							)
 						}
 						onOpenAnnotationContextMenu={(params) =>
 							this._onOpenContextMenu(
-								createAnnotationContextMenu(this, params)
+								createAnnotationContextMenu(this, params),
 							)
 						}
 						onOpenSelectorContextMenu={(params) =>
 							this._onOpenContextMenu(
-								createSelectorContextMenu(this, params)
+								createSelectorContextMenu(this, params),
 							)
 						}
 						onOpenThumbnailContextMenu={(params) =>
 							this._onOpenContextMenu(
-								createThumbnailContextMenu(this, params)
+								createThumbnailContextMenu(this, params),
 							)
 						}
 						onCloseContextMenu={this.closeContextMenu.bind(this)}
 						onCloseLabelPopup={this._handleLabelPopupClose.bind(
-							this
+							this,
 						)}
 						onEnterPassword={this.enterPassword.bind(this)}
 						onAddToNote={(annotations) => {
@@ -477,45 +478,46 @@ class Reader {
 							this._primaryView._pdfThumbnails.render(pageIndexes)
 						}
 						onSetDataTransferAnnotations={this._handleSetDataTransferAnnotations.bind(
-							this
+							this,
 						)}
 						onOpenLink={this._onOpenLink}
 						onChangeAppearance={this._handleAppearanceChange.bind(
-							this
+							this,
 						)}
 						onChangeFocusModeEnabled={this._handleFocusModeEnabledChange.bind(
-							this
+							this,
 						)}
 						onChangeFindState={this._handleFindStateChange.bind(
-							this
+							this,
 						)}
 						onFindNext={this.findNext.bind(this)}
 						onFindPrevious={this.findPrevious.bind(this)}
 						onToggleContextPane={this._onToggleContextPane}
 						translateList={this._translateList}
+						defaultTranslateKey={this._defaultTranslateKey}
 						showTranslationControls={
 							this._state.translationControlsVisible
 						}
 						onStartTranslation={this._handleStartTranslation.bind(
-							this
+							this,
 						)}
 						onStopTranslation={this._handleStopTranslation.bind(
-							this
+							this,
 						)}
 						onDownloadTranslation={this._onDownloadTranslation}
 						onDownloadOriginal={this._onDownloadOriginal}
 						translationActive={this._state.translationActive}
 						onChangeTextSelectionAnnotationMode={this.setTextSelectionAnnotationMode.bind(
-							this
+							this,
 						)}
 						onToggleSyncScroll={this._handleToggleSyncScroll.bind(
-							this
+							this,
 						)}
 						onToggleShowOriginal={this._handleToggleShowOriginal.bind(
-							this
+							this,
 						)}
 						onCloseOverlayPopup={this._handleOverlayPopupClose.bind(
-							this
+							this,
 						)}
 						onChangeSplitType={(type) => {
 							if (type === "horizontal") {
@@ -532,7 +534,7 @@ class Reader {
 						onAddTheme={() => this._updateState({ themePopup: {} })}
 						onOpenThemeContextMenu={(params) =>
 							this._onOpenContextMenu(
-								createThemeContextMenu(this, params)
+								createThemeContextMenu(this, params),
 							)
 						}
 						onCloseThemePopup={() =>
@@ -545,7 +547,7 @@ class Reader {
 								...(customThemes || []),
 							];
 							let map = new Map(
-								themes.map((theme) => [theme.id, theme])
+								themes.map((theme) => [theme.id, theme]),
 							);
 							let { lightTheme, darkTheme } = this._state;
 							if (lightTheme && !map.has(lightTheme.id)) {
@@ -562,7 +564,7 @@ class Reader {
 							});
 						}}
 					/>
-				</ReaderContext.Provider>
+				</ReaderContext.Provider>,
 			);
 		}
 
@@ -594,7 +596,7 @@ class Reader {
 	_ensureType() {
 		if (!Array.from(arguments).includes(this._type)) {
 			throw new Error(
-				`The operation is not supported for '${this._type}'`
+				`The operation is not supported for '${this._type}'`,
 			);
 		}
 	}
@@ -622,11 +624,11 @@ class Reader {
 			previousState.selectedAnnotationIDs
 		) {
 			this._primaryView?.setSelectedAnnotationIDs(
-				this._state.selectedAnnotationIDs
+				this._state.selectedAnnotationIDs,
 			);
 			if (!this._isTranslationView(this._secondaryView)) {
 				this._secondaryView?.setSelectedAnnotationIDs(
-					this._state.selectedAnnotationIDs
+					this._state.selectedAnnotationIDs,
 				);
 			}
 		}
@@ -642,7 +644,7 @@ class Reader {
 			this._primaryView?.setShowAnnotations(this._state.showAnnotations);
 			if (!this._isTranslationView(this._secondaryView)) {
 				this._secondaryView?.setShowAnnotations(
-					this._state.showAnnotations
+					this._state.showAnnotations,
 				);
 			}
 		}
@@ -695,7 +697,7 @@ class Reader {
 			previousState.primaryViewAnnotationPopup
 		) {
 			this._primaryView?.setAnnotationPopup(
-				this._state.primaryViewAnnotationPopup
+				this._state.primaryViewAnnotationPopup,
 			);
 		}
 		if (
@@ -703,7 +705,7 @@ class Reader {
 			previousState.secondaryViewAnnotationPopup
 		) {
 			this._secondaryView?.setAnnotationPopup(
-				this._state.secondaryViewAnnotationPopup
+				this._state.secondaryViewAnnotationPopup,
 			);
 		}
 
@@ -712,7 +714,7 @@ class Reader {
 			previousState.primaryViewSelectionPopup
 		) {
 			this._primaryView?.setSelectionPopup(
-				this._state.primaryViewSelectionPopup
+				this._state.primaryViewSelectionPopup,
 			);
 		}
 		if (
@@ -720,7 +722,7 @@ class Reader {
 			previousState.secondaryViewSelectionPopup
 		) {
 			this._secondaryView?.setSelectionPopup(
-				this._state.secondaryViewSelectionPopup
+				this._state.secondaryViewSelectionPopup,
 			);
 		}
 
@@ -729,7 +731,7 @@ class Reader {
 			previousState.primaryViewOverlayPopup
 		) {
 			this._primaryView?.setOverlayPopup(
-				this._state.primaryViewOverlayPopup
+				this._state.primaryViewOverlayPopup,
 			);
 		}
 		if (
@@ -737,7 +739,7 @@ class Reader {
 			previousState.secondaryViewOverlayPopup
 		) {
 			this._secondaryView?.setOverlayPopup(
-				this._state.secondaryViewOverlayPopup
+				this._state.secondaryViewOverlayPopup,
 			);
 		}
 
@@ -752,7 +754,7 @@ class Reader {
 			previousState.secondaryViewFindState
 		) {
 			this._secondaryView?.setFindState(
-				this._state.secondaryViewFindState
+				this._state.secondaryViewFindState,
 			);
 		}
 
@@ -776,7 +778,7 @@ class Reader {
 		if (init || this._state.sidebarOpen !== previousState.sidebarOpen) {
 			document.body.classList.toggle(
 				"sidebar-open",
-				this._state.sidebarOpen
+				this._state.sidebarOpen,
 			);
 			this._primaryView?.setSidebarOpen(this._state.sidebarOpen);
 			this._secondaryView?.setSidebarOpen(this._state.sidebarOpen);
@@ -790,7 +792,7 @@ class Reader {
 				document.body.classList.add(
 					this._state.splitType === "vertical"
 						? "enable-vertical-split-view"
-						: "enable-horizontal-split-view"
+						: "enable-horizontal-split-view",
 				);
 				this._updateState({
 					secondaryViewState: { ...this._state.primaryViewState },
@@ -814,7 +816,7 @@ class Reader {
 				document.body.classList.add(
 					this._state.splitType === "vertical"
 						? "enable-vertical-split-view"
-						: "enable-horizontal-split-view"
+						: "enable-horizontal-split-view",
 				);
 			}
 		}
@@ -822,14 +824,14 @@ class Reader {
 		if (init || this._state.splitSize !== previousState.splitSize) {
 			document.documentElement.style.setProperty(
 				"--split-view-size",
-				this._state.splitSize
+				this._state.splitSize,
 			);
 		}
 
 		if (init || this._state.sidebarWidth !== previousState.sidebarWidth) {
 			document.documentElement.style.setProperty(
 				"--sidebar-width",
-				this._state.sidebarWidth + "px"
+				this._state.sidebarWidth + "px",
 			);
 		}
 
@@ -841,7 +843,7 @@ class Reader {
 			let root = document.documentElement;
 			root.style.setProperty(
 				"--bottom-placeholder-height",
-				(this._state.bottomPlaceholderHeight || 0) + "px"
+				(this._state.bottomPlaceholderHeight || 0) + "px",
 			);
 		}
 
@@ -853,7 +855,7 @@ class Reader {
 			let root = document.documentElement;
 			root.style.setProperty(
 				"--toolbar-placeholder-width",
-				this._state.toolbarPlaceholderWidth + "px"
+				this._state.toolbarPlaceholderWidth + "px",
 			);
 		}
 
@@ -1023,7 +1025,7 @@ class Reader {
 		} catch (e) {
 			console.error(e);
 			this.setErrorMessage(
-				this._getString("reader-focus-mode-not-supported")
+				this._getString("reader-focus-mode-not-supported"),
 			);
 			setTimeout(() => {
 				this.setErrorMessage(null);
@@ -1150,7 +1152,7 @@ class Reader {
 	setTextSelectionAnnotationMode(mode) {
 		if (!["highlight", "underline"].includes(mode)) {
 			throw new Error(
-				`Invalid 'textSelectionAnnotationMode' value '${mode}'`
+				`Invalid 'textSelectionAnnotationMode' value '${mode}'`,
 			);
 		}
 		this._updateState({ textSelectionAnnotationMode: mode });
@@ -1172,13 +1174,13 @@ class Reader {
 			index + 1
 		}.`;
 		let totalResults = `${this._getString(
-			"reader-search-result-total"
+			"reader-search-result-total",
 		)}: ${total}.`;
 		let page = currentPageLabel
 			? `${this._getString("reader-page")}: ${currentPageLabel}.`
 			: "";
 		this.setA11yMessage(
-			`${searchIndex} ${totalResults} ${page} ${currentSnippet || ""}`
+			`${searchIndex} ${totalResults} ${page} ${currentSnippet || ""}`,
 		);
 	}, 100);
 
@@ -1295,7 +1297,7 @@ class Reader {
 			// Tell screen readers the annotation was added after focus is settled
 			setTimeout(() => {
 				let annotationType = getLocalizedString(
-					`reader-${annotation.type}-annotation`
+					`reader-${annotation.type}-annotation`,
 				);
 				let msg = getLocalizedString("reader-a11y-annotation-created", {
 					type: annotationType,
@@ -1349,7 +1351,7 @@ class Reader {
 		let onOpenViewContextMenu = (params) => {
 			// Trigger view context menu after focus even fires and focuses the current view
 			setTimeout(() =>
-				this._onOpenContextMenu(createViewContextMenu(this, params))
+				this._onOpenContextMenu(createViewContextMenu(this, params)),
 			);
 		};
 
@@ -1427,13 +1429,13 @@ class Reader {
 			// Announce the content of a focused citation
 			if (annotation.type == "citation") {
 				this.setA11yMessage(
-					`${annotation.references.map((r) => r.text).join("")}`
+					`${annotation.references.map((r) => r.text).join("")}`,
 				);
 				return;
 			}
 			// Announce the type and content of annotations added by the user
 			let annotationType = this._getString(
-				`reader-${annotation.type}-annotation`
+				`reader-${annotation.type}-annotation`,
 			);
 			let annotationContent = `${annotationType}. ${
 				annotation.text || annotation.comment
@@ -1577,11 +1579,11 @@ class Reader {
 			// Access internal viewerContainer directly
 			const c1 =
 				this._primaryView?._iframeWindow?.document.getElementById(
-					"viewerContainer"
+					"viewerContainer",
 				);
 			const c2 =
 				this._secondaryView?._iframeWindow?.document.getElementById(
-					"viewerContainer"
+					"viewerContainer",
 				);
 
 			if (!c1 || !c2) return;
@@ -1633,14 +1635,14 @@ class Reader {
 					this._getString("reader-prompt-delete-annotations-text", {
 						count: ids.length,
 					}),
-					this._getString("general-delete")
+					this._getString("general-delete"),
 				)
 			) {
 				return 0;
 			}
 		}
 		let selectedAnnotationIDs = this._state.selectedAnnotationIDs.filter(
-			(id) => !ids.includes(id)
+			(id) => !ids.includes(id),
 		);
 		this._updateState({
 			selectedAnnotationIDs,
@@ -1803,7 +1805,7 @@ class Reader {
 		if (
 			!ids.length &&
 			this._state.selectedAnnotationIDs.some(
-				(id) => !this._state.annotations.find((x) => x.id === id)
+				(id) => !this._state.annotations.find((x) => x.id === id),
 			)
 		) {
 			this._updateState({ selectedAnnotationIDs: [] });
@@ -1865,25 +1867,25 @@ class Reader {
 		if (ids.length === 1) {
 			let id = ids[0];
 			let annotation = this._annotationManager._annotations.find(
-				(x) => x.id === id
+				(x) => x.id === id,
 			);
 			if (annotation) {
 				if (shift && this._state.selectedAnnotationIDs.length) {
 					let selectedIDs = this._state.selectedAnnotationIDs.slice();
 					let annotations = this._state.annotations.filter(
-						(x) => !x._hidden
+						(x) => !x._hidden,
 					);
 
 					let annotationIndex = annotations.findIndex(
-						(x) => x.id === id
+						(x) => x.id === id,
 					);
 					let lastSelectedIndex = annotations.findIndex(
-						(x) => x.id === selectedIDs.slice(-1)[0]
+						(x) => x.id === selectedIDs.slice(-1)[0],
 					);
 					let selectedIndices = selectedIDs.map((id) =>
 						annotations.findIndex(
-							(annotation) => annotation.id === id
-						)
+							(annotation) => annotation.id === id,
+						),
 					);
 					let minSelectedIndex = Math.min(...selectedIndices);
 					let maxSelectedIndex = Math.max(...selectedIndices);
@@ -1907,7 +1909,7 @@ class Reader {
 						for (
 							let i = Math.min(
 								annotationIndex,
-								lastSelectedIndex
+								lastSelectedIndex,
 							);
 							i <= Math.max(annotationIndex, lastSelectedIndex);
 							i++
@@ -1959,11 +1961,11 @@ class Reader {
 											"annotations"
 									) {
 										content = document.querySelector(
-											`[data-sidebar-annotation-id="${id}"] .comment .content`
+											`[data-sidebar-annotation-id="${id}"] .comment .content`,
 										);
 									} else {
 										content = document.querySelector(
-											`.annotation-popup .comment .content`
+											`.annotation-popup .comment .content`,
 										);
 									}
 									content?.focus();
@@ -1979,18 +1981,18 @@ class Reader {
 					// is selected and how one can manipulate it
 					setTimeout(() => {
 						let annotationType = getLocalizedString(
-							`reader-${annotation.type}-annotation`
+							`reader-${annotation.type}-annotation`,
 						);
 						let a11yAnnouncement = getLocalizedString(
 							"reader-a11y-annotation-selected",
-							{ type: annotationType }
+							{ type: annotationType },
 						);
 						// Announce if there is a popup.
 						if (document.querySelector(".annotation-popup")) {
 							a11yAnnouncement +=
 								" " +
 								getLocalizedString(
-									"reader-a11y-annotation-popup-appeared"
+									"reader-a11y-annotation-popup-appeared",
 								);
 						}
 						// Announce available keyboard interface options for this annotation type
@@ -2000,7 +2002,7 @@ class Reader {
 							a11yAnnouncement +=
 								" " +
 								getLocalizedString(
-									"reader-a11y-edit-text-annotation"
+									"reader-a11y-edit-text-annotation",
 								);
 						} else if (
 							["note", "text", "image"].includes(annotation.type)
@@ -2008,13 +2010,13 @@ class Reader {
 							a11yAnnouncement +=
 								" " +
 								getLocalizedString(
-									"reader-a11y-move-annotation"
+									"reader-a11y-move-annotation",
 								);
 							if (["text", "image"].includes(annotation.type)) {
 								a11yAnnouncement +=
 									" " +
 									getLocalizedString(
-										"reader-a11y-resize-annotation"
+										"reader-a11y-resize-annotation",
 									);
 							}
 						}
@@ -2031,7 +2033,7 @@ class Reader {
 				// Wait a bit to make sure the annotation view is rendered
 				setTimeout(() => {
 					let sidebarItem = document.querySelector(
-						`[data-sidebar-annotation-id="${id}"]`
+						`[data-sidebar-annotation-id="${id}"]`,
 					);
 					if (sidebarItem) {
 						sidebarItem.scrollIntoView({
@@ -2204,7 +2206,7 @@ class Reader {
 		annotations = [annotation];
 		if (selectedIDs.includes(annotation.id) && selectedIDs.length > 1) {
 			annotations = this._state.annotations.filter((x) =>
-				selectedIDs.includes(x.id)
+				selectedIDs.includes(x.id),
 			);
 		}
 		if (annotations.length > 1) {
@@ -2243,7 +2245,7 @@ class Reader {
 			}) => {
 				if (image) {
 					let img = document.querySelector(
-						`[data-sidebar-annotation-id="${id}"] img`
+						`[data-sidebar-annotation-id="${id}"] img`,
 					);
 					if (img) {
 						image = getImageDataURL(img);
@@ -2260,7 +2262,7 @@ class Reader {
 					pageLabel,
 					tags,
 				};
-			}
+			},
 		);
 		window._draggingAnnotationIDs = annotations.map((x) => x.id);
 		// Clear image data set on some untested type (when drag is initiated on img),
@@ -2278,12 +2280,12 @@ class Reader {
 		let selectedIDs = this._state.selectedAnnotationIDs;
 		let currentAnnotation = this._annotationManager._getAnnotationByID(id);
 		let selectedAnnotations = this._annotationManager._annotations.filter(
-			(x) => selectedIDs.includes(x.id)
+			(x) => selectedIDs.includes(x.id),
 		);
 		let allAnnotations = this._annotationManager._annotations;
 		// Get target rect from preview component in the sidebar or a view popup
 		let labelNode = document.querySelector(
-			`[data-sidebar-annotation-id="${id}"] header .label, .view-popup header .label`
+			`[data-sidebar-annotation-id="${id}"] header .label, .view-popup header .label`,
 		);
 		let { left, top, right, bottom } = labelNode.getBoundingClientRect();
 		let rect = [left, top, right, bottom];
