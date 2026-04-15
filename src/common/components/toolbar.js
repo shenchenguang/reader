@@ -126,10 +126,7 @@ function Toolbar(props) {
 		: [];
 	const hasTranslation =
 		props.showTranslationControls && translationServices.length > 0;
-	const downloadHasDropdown =
-		props.isEnglishDocument !== false &&
-		translationServices.length > 0 &&
-		props.showTranslationControls;
+	const downloadHasDropdown = props.hasTranslationResult;
 	function getBestDefaultService() {
 		try {
 			const savedServiceId = localStorage.getItem(

@@ -200,6 +200,7 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onStopTranslation={props.onStopTranslation}
 						onDownloadTranslation={props.onDownloadTranslation}
 						onDownloadOriginal={props.onDownloadOriginal}
+						hasTranslationResult={state.hasTranslationResult}
 						isEnglishDocument={state.documentIsEnglish}
 						onChangeTextSelectionAnnotationMode={
 							props.onChangeTextSelectionAnnotationMode

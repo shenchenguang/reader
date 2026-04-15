@@ -205,6 +205,7 @@ class Reader {
 			lightTheme,
 			darkTheme,
 			translationActive: !!this._translationBuf,
+			hasTranslationResult: !!this._translationBuf,
 			translationLoading: false,
 			autoDisableNoteTool:
 				options.autoDisableNoteTool !== undefined
@@ -1081,7 +1082,11 @@ class Reader {
 			this._preTranslationZoomState =
 				this._primaryView?.getZoomState?.() || null;
 		}
-		let update = { translationActive: active, translationLoading: false };
+		let update = {
+			translationActive: active,
+			hasTranslationResult: active,
+			translationLoading: false,
+		};
 		if (
 			active &&
 			this._type === "pdf" &&
