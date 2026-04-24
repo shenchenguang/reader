@@ -1,0 +1,28 @@
+#!/bin/bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+npm --prefix document-worker ci
+
+cd document-worker/pdf.js
+npm ci --force --ignore-scripts
+npx gulp lib-legacy
+cd ../..
+
+mkdir -p document-worker/build/cmaps
+mkdir -p document-worker/build/standard_fonts
+rsync -av --recursive --exclude='.*' document-worker/pdf.js/external/bcmaps/ document-worker/build/cmaps/
+rsync -av --recursive --exclude='.*' document-worker/pdf.js/external/standard_fonts/ document-worker/build/standard_fonts/
+
+npm --prefix document-worker run build:worker
+
+WORKER_SOURCE="document-worker/build/worker.js"
+
+for BUILD in dev web zotero; do
+	BUILD_DIR="build/$BUILD/pdf/build"
+	mkdir -p "$BUILD_DIR"
+	cp "$WORKER_SOURCE" "$BUILD_DIR/worker.commonjs.js"
+done
