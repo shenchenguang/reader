@@ -97,6 +97,8 @@ class Reader {
 		this._onStopTranslation = options.onStopTranslation;
 		this._onDownloadTranslation = options.onDownloadTranslation;
 		this._onDownloadOriginal = options.onDownloadOriginal;
+		this._onDownloadOriginalWithAnnotations =
+			options.onDownloadOriginalWithAnnotations;
 		this._onExposeTranslationReceiver = options.onExposeTranslationReceiver;
 
 		if (Array.isArray(options.ftl)) {
@@ -507,6 +509,9 @@ class Reader {
 						)}
 						onDownloadTranslation={this._onDownloadTranslation}
 						onDownloadOriginal={this._onDownloadOriginal}
+						onDownloadOriginalWithAnnotations={
+							this._onDownloadOriginalWithAnnotations
+						}
 						translationActive={this._state.translationActive}
 						onChangeTextSelectionAnnotationMode={this.setTextSelectionAnnotationMode.bind(
 							this,

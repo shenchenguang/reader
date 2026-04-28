@@ -124,9 +124,24 @@ function Toolbar(props) {
 	const translationServices = Array.isArray(props.translateList)
 		? props.translateList
 		: [];
+	const { l10n } = useLocalization();
 	const hasTranslation =
 		props.showTranslationControls && translationServices.length > 0;
-	const downloadHasDropdown = props.hasTranslationResult;
+	const downloadOptions = [
+		{
+			id: "original",
+			label: l10n.getString("reader-download-original"),
+		},
+		props.hasTranslationResult && {
+			id: "translation",
+			label: l10n.getString("reader-download-translation"),
+		},
+		props.hasAnnotations && {
+			id: "original-with-annotations",
+			label: l10n.getString("reader-download-original-with-annotations"),
+		},
+	].filter(Boolean);
+	const downloadHasDropdown = downloadOptions.length > 1;
 	function getBestDefaultService() {
 		try {
 			const savedServiceId = localStorage.getItem(
@@ -156,8 +171,6 @@ function Toolbar(props) {
 		useState(getBestDefaultService);
 	const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 	const { platform } = useContext(ReaderContext);
-
-	const { l10n } = useLocalization();
 
 	useDropdownAutoClose(sidebarDropdownRef, isSidebarDropdownOpen, () =>
 		setIsSidebarDropdownOpen(false),
@@ -311,7 +324,7 @@ function Toolbar(props) {
 
 	function handleDownloadMenuToggle() {
 		if (!downloadHasDropdown) {
-			handleDownload("original");
+			handleDownload(downloadOptions[0].id);
 			return;
 		}
 		setIsDownloadMenuOpen((open) => {
@@ -328,6 +341,8 @@ function Toolbar(props) {
 		setIsDownloadMenuOpen(false);
 		if (option === "translation") {
 			props.onDownloadTranslation?.();
+		} else if (option === "original-with-annotations") {
+			props.onDownloadOriginalWithAnnotations?.();
 		} else {
 			props.onDownloadOriginal?.();
 		}
@@ -733,18 +748,15 @@ function Toolbar(props) {
 					</button>
 					{downloadHasDropdown && isDownloadMenuOpen && (
 						<div className="download-dropdown-menu" role="menu">
-							<button
-								type="button"
-								onClick={() => handleDownload("translation")}
-							>
-								{l10n.getString("reader-download-translation")}
-							</button>
-							<button
-								type="button"
-								onClick={() => handleDownload("original")}
-							>
-								{l10n.getString("reader-download-original")}
-							</button>
+							{downloadOptions.map((option) => (
+								<button
+									key={option.id}
+									type="button"
+									onClick={() => handleDownload(option.id)}
+								>
+									{option.label}
+								</button>
+							))}
 						</div>
 					)}
 				</div>
