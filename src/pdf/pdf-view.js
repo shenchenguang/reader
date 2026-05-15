@@ -138,6 +138,7 @@ class PDFView {
 			options.onSetDataTransferAnnotations;
 		this._onAddAnnotation = options.onAddAnnotation;
 		this._onUpdateAnnotations = options.onUpdateAnnotations;
+		this._onAnnotationEditComplete = options.onAnnotationEditComplete;
 		this._onDeleteAnnotations = options.onDeleteAnnotations;
 		this._onOpenLink = options.onOpenLink;
 		this._onSelectAnnotations = options.onSelectAnnotations;
@@ -459,6 +460,14 @@ class PDFView {
 		this._iframeWindow.addEventListener(
 			"input",
 			this._handleInput.bind(this)
+		);
+		this._iframeWindow.addEventListener(
+			"focusin",
+			this._handleFocusIn.bind(this)
+		);
+		this._iframeWindow.addEventListener(
+			"focusout",
+			this._handleFocusOut.bind(this)
 		);
 
 		this._dragCanvas = this._iframeWindow.document.createElement("canvas");
@@ -4740,6 +4749,29 @@ class PDFView {
 			let comment = target.value;
 			target.setAttribute("data-comment", comment);
 			this._onUpdateAnnotations([{ id, comment }]);
+		}
+	}
+
+	_handleFocusIn(event) {
+		let target = event.target;
+		if (target.classList?.contains("textAnnotation")) {
+			target.setAttribute("data-focus-comment", target.value);
+		}
+	}
+
+	_handleFocusOut(event) {
+		let target = event.target;
+		if (target.classList?.contains("textAnnotation")) {
+			let id = target.getAttribute("data-id");
+			let comment = target.value;
+			if (!target.hasAttribute("data-focus-comment")) {
+				return;
+			}
+			let focusComment = target.getAttribute("data-focus-comment") || "";
+			target.removeAttribute("data-focus-comment");
+			if (comment !== focusComment) {
+				this._onAnnotationEditComplete?.({ id, comment });
+			}
 		}
 	}
 

@@ -28,6 +28,7 @@ function AnnotationPopup(props) {
 				}}
 				onOpenTagsPopup={props.onOpenTagsPopup}
 				onChange={props.onChange}
+				onAnnotationEditComplete={props.onAnnotationEditComplete}
 				onOpenPageLabelPopup={props.onOpenPageLabelPopup}
 				onOpenContextMenu={props.onOpenAnnotationContextMenu}
 				onDragStart={(event) => {

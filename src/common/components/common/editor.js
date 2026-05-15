@@ -267,8 +267,13 @@ function Toolbar({ onCommand }) {
 let Content = React.forwardRef((props, ref) => {
 	// Store last value to prevent contenteditable content updating while typing, which reset cursor position
 	let lastValueRef = useRef();
+	let focusValueRef = useRef();
+	let pendingEditRef = useRef(false);
+	let onBlurRef = useRef();
 	let innerRef = useRef();
 	let rendererRef = useRef();
+
+	onBlurRef.current = props.onBlur;
 
 	useEffect(() => {
 		if (lastValueRef.current !== props.text) {
@@ -279,6 +284,18 @@ let Content = React.forwardRef((props, ref) => {
 			}
 		}
 	});
+
+	useEffect(() => {
+		function handleWindowBlur() {
+			reportEditComplete();
+		}
+
+		window.addEventListener('blur', handleWindowBlur);
+		return () => {
+			window.removeEventListener('blur', handleWindowBlur);
+			reportEditComplete();
+		};
+	}, []);
 
 	useImperativeHandle(ref, () => ({
 		focus: () => innerRef.current.focus()
@@ -295,7 +312,35 @@ let Content = React.forwardRef((props, ref) => {
 		text = text.replace(/\n<\//g, '<\/');
 		text = text.trim();
 		lastValueRef.current = text;
+		pendingEditRef.current = true;
 		props.onChange(text);
+	}
+
+	function getCurrentText() {
+		return lastValueRef.current ?? props.text ?? '';
+	}
+
+	function handleFocus() {
+		focusValueRef.current = getCurrentText();
+	}
+
+	function reportEditComplete() {
+		if (!pendingEditRef.current) {
+			return;
+		}
+
+		let text = getCurrentText();
+		pendingEditRef.current = false;
+		if (focusValueRef.current !== undefined && text === focusValueRef.current) {
+			return;
+		}
+
+		focusValueRef.current = text;
+		onBlurRef.current?.(text);
+	}
+
+	function handleBlur() {
+		reportEditComplete();
 	}
 
 	return (
@@ -311,6 +356,8 @@ let Content = React.forwardRef((props, ref) => {
 				data-tabstop={!props.readOnly ? 1 : undefined}
 				tabIndex={!props.readOnly ? -1 : undefined}
 				onInput={handleInput}
+				onFocus={handleFocus}
+				onBlur={handleBlur}
 				role="textbox"
 				aria-label={props.ariaLabel}
 				aria-readonly={props.readOnly}
@@ -339,6 +386,7 @@ function Editor(props) {
 				enableRichText={props.enableRichText}
 				placeholder={props.placeholder}
 				onChange={props.onChange}
+				onBlur={props.onBlur}
 				ariaLabel={props.ariaLabel}
 			/>
 		</div>

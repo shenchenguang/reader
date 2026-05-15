@@ -33,6 +33,10 @@ export function PopupPreview(props) {
 		props.onChange({ id: props.annotation.id, comment: text });
 	}
 
+	function handleCommentBlur(text) {
+		props.onAnnotationEditComplete?.({ ...props.annotation, comment: text });
+	}
+
 	function handleClickMore(event) {
 		// Prevent selecting annotation
 		event.stopPropagation();
@@ -103,6 +107,7 @@ export function PopupPreview(props) {
 						readOnly={props.readOnly}
 						enableRichText={annotation.type !== 'text'}
 						onChange={handleCommentChange}
+						onBlur={handleCommentBlur}
 					/>
 				</div>
 			)}
@@ -151,6 +156,10 @@ export function SidebarPreview(props) {
 
 	function handleCommentChange(text) {
 		props.onChange({ id: props.annotation.id, comment: text });
+	}
+
+	function handleCommentBlur(text) {
+		props.onAnnotationEditComplete?.({ ...props.annotation, comment: text });
 	}
 
 	function handleClickMore(event) {
@@ -256,6 +265,7 @@ export function SidebarPreview(props) {
 				ariaLabel={l10n.getString('reader-annotation-comment')}
 				enableRichText={annotation.type !== 'text'}
 				onChange={handleCommentChange}
+				onBlur={handleCommentBlur}
 			/>
 		</div>;
 

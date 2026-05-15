@@ -83,6 +83,9 @@ function View(props) {
 						onChange={(annotation) =>
 							props.onUpdateAnnotations([annotation])
 						}
+						onAnnotationEditComplete={
+							props.onAnnotationEditComplete
+						}
 						onDragStart={() => {}}
 						onOpenTagsPopup={props.onOpenTagsPopup}
 						onOpenPageLabelPopup={props.onOpenPageLabelPopup}
@@ -260,6 +263,9 @@ const ReaderUI = React.forwardRef((props, ref) => {
 										}
 										onUpdateAnnotations={
 											props.onUpdateAnnotations
+										}
+										onAnnotationEditComplete={
+											props.onAnnotationEditComplete
 										}
 										onSetDataTransferAnnotations={
 											props.onSetDataTransferAnnotations

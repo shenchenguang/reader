@@ -103,6 +103,7 @@ const Annotation = React.memo((props) => {
 				onOpenPageLabelPopup={props.onOpenPageLabelPopup}
 				onOpenContextMenu={props.onOpenContextMenu}
 				onChange={props.onChange}
+				onAnnotationEditComplete={props.onAnnotationEditComplete}
 			/>
 		</div>
 	);
@@ -475,6 +476,7 @@ const AnnotationsView = memo(React.forwardRef((props, ref) => {
 							onOpenPageLabelPopup={props.onOpenPageLabelPopup}
 							onOpenContextMenu={handleContextMenuOpen}
 							onSetDataTransferAnnotations={props.onSetDataTransferAnnotations}
+							onAnnotationEditComplete={props.onAnnotationEditComplete}
 						/>
 					))
 					: !props.filter.query.length && !props.readOnly && !window.isWeb && <div>{l10n.getString('reader-no-annotations')}</div>}

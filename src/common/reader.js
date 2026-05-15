@@ -82,6 +82,7 @@ class Reader {
 		this._onBringReaderToFront = options.onBringReaderToFront;
 		this._onTextSelectionAnnotationModeChange =
 			options.onTextSelectionAnnotationModeChange;
+		this._onAnnotationEditComplete = options.onAnnotationEditComplete;
 		this._onSaveCustomThemes = options.onSaveCustomThemes;
 		this._onSetLightTheme = options.onSetLightTheme;
 		this._onSetDarkTheme = options.onSetDarkTheme;
@@ -434,6 +435,9 @@ class Reader {
 							);
 							this._enableAnnotationDeletionFromComment = false;
 						}}
+						onAnnotationEditComplete={
+							this._onAnnotationEditComplete
+						}
 						onDeleteAnnotations={this._annotationManager.deleteAnnotations.bind(
 							this._annotationManager,
 						)}
@@ -1506,6 +1510,7 @@ class Reader {
 				this._handleSetDataTransferAnnotations.bind(this),
 			onAddAnnotation,
 			onUpdateAnnotations,
+			onAnnotationEditComplete: this._onAnnotationEditComplete,
 			onOpenLink,
 			onFocus,
 			onOpenAnnotationContextMenu,
