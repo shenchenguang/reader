@@ -90,12 +90,21 @@ class Reader {
 		this._onSetDataTransferAnnotations =
 			options.onSetDataTransferAnnotations;
 		this._onSetZoom = options.onSetZoom;
-		this._translateList = Array.isArray(options.translateList)
-			? options.translateList
-			: [];
-		this._defaultTranslateKey = options.defaultTranslateKey;
-		this._onStartTranslation = options.onStartTranslation;
-		this._onStopTranslation = options.onStopTranslation;
+			this._translateList = Array.isArray(options.translateList)
+				? options.translateList
+				: [];
+			this._languageList = Array.isArray(options.languageList)
+				? options.languageList
+				: [];
+			this._glossaryList = Array.isArray(options.glossaryList)
+				? options.glossaryList
+				: [];
+			this._selectedGlossaryId = options.selectedGlossaryId || "";
+			this._defaultTranslateKey = options.defaultTranslateKey;
+			this._onStartTranslation = options.onStartTranslation;
+			this._onSelectGlossary = options.onSelectGlossary;
+			this._onCreateGlossary = options.onCreateGlossary;
+			this._onStopTranslation = options.onStopTranslation;
 		this._onDownloadTranslation = options.onDownloadTranslation;
 		this._onDownloadOriginal = options.onDownloadOriginal;
 		this._onDownloadOriginalWithAnnotations =
@@ -224,9 +233,11 @@ class Reader {
 					: true,
 			textSelectionAnnotationMode:
 				options.textSelectionAnnotationMode || "highlight",
-			colorScheme: options.colorScheme,
-			translationControlsVisible: this._type !== "pdf",
-			documentIsEnglish: null,
+				colorScheme: options.colorScheme,
+				translationControlsVisible: this._type !== "pdf",
+				translationGlossaryList: this._glossaryList,
+				translationSelectedGlossaryId: this._selectedGlossaryId,
+				documentIsEnglish: null,
 			tool: this._tools["pointer"], // Must always be a reference to one of this._tools objects
 			thumbnails: [],
 			outline: null, // null — loading, [] — empty
@@ -500,17 +511,28 @@ class Reader {
 						onFindNext={this.findNext.bind(this)}
 						onFindPrevious={this.findPrevious.bind(this)}
 						onToggleContextPane={this._onToggleContextPane}
-						translateList={this._translateList}
-						defaultTranslateKey={this._defaultTranslateKey}
-						showTranslationControls={
-							this._state.translationControlsVisible
-						}
-						onStartTranslation={this._handleStartTranslation.bind(
-							this,
-						)}
-						onStopTranslation={this._handleStopTranslation.bind(
-							this,
-						)}
+							translateList={this._translateList}
+							languageList={this._languageList}
+							glossaryList={this._state.translationGlossaryList}
+							selectedGlossaryId={
+								this._state.translationSelectedGlossaryId
+							}
+							defaultTranslateKey={this._defaultTranslateKey}
+							showTranslationControls={
+								this._state.translationControlsVisible
+							}
+							onStartTranslation={this._handleStartTranslation.bind(
+								this,
+							)}
+							onSelectGlossary={this._handleSelectGlossary.bind(
+								this,
+							)}
+							onCreateGlossary={this._handleCreateGlossary.bind(
+								this,
+							)}
+							onStopTranslation={this._handleStopTranslation.bind(
+								this,
+							)}
 						onDownloadTranslation={this._onDownloadTranslation}
 						onDownloadOriginal={this._onDownloadOriginal}
 						onDownloadOriginalWithAnnotations={
@@ -1145,6 +1167,15 @@ class Reader {
 		this.setTranslationBuf(null);
 	}
 
+	setGlossaries({ glossaryList, selectedGlossaryId } = {}) {
+		this._glossaryList = Array.isArray(glossaryList) ? glossaryList : [];
+		this._selectedGlossaryId = selectedGlossaryId || "";
+		this._updateState({
+			translationGlossaryList: this._glossaryList,
+			translationSelectedGlossaryId: this._selectedGlossaryId,
+		});
+	}
+
 	_handleStartTranslation(service, meta) {
 		if (!this._onStartTranslation) {
 			return;
@@ -1156,6 +1187,18 @@ class Reader {
 			this._updateState({ translationLoading: false });
 			throw error;
 		}
+	}
+
+	_handleSelectGlossary(glossaryId) {
+		this._selectedGlossaryId = glossaryId || "";
+		this._updateState({
+			translationSelectedGlossaryId: this._selectedGlossaryId,
+		});
+		this._onSelectGlossary?.(this._selectedGlossaryId);
+	}
+
+	_handleCreateGlossary() {
+		this._onCreateGlossary?.();
 	}
 
 	_handleStopTranslation(service) {

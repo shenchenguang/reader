@@ -124,6 +124,7 @@ function generateReaderConfig(build) {
 			new HtmlWebpackPlugin({
 				template: "./index.reader.html",
 				filename: "./[name].html",
+				hash: true,
 				templateParameters: {
 					build,
 				},

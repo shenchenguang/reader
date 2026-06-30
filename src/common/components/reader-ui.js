@@ -193,6 +193,11 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						onToggleFind={props.onToggleFind}
 						onToggleContextPane={props.onToggleContextPane}
 						translateList={props.translateList}
+						languageList={props.languageList}
+						glossaryList={state.translationGlossaryList}
+						selectedGlossaryId={
+							state.translationSelectedGlossaryId
+						}
 						defaultTranslateKey={props.defaultTranslateKey}
 						showTranslationControls={
 							state.translationControlsVisible
@@ -200,6 +205,8 @@ const ReaderUI = React.forwardRef((props, ref) => {
 						translationActive={state.translationActive}
 						translationLoading={state.translationLoading}
 						onStartTranslation={props.onStartTranslation}
+						onSelectGlossary={props.onSelectGlossary}
+						onCreateGlossary={props.onCreateGlossary}
 						onStopTranslation={props.onStopTranslation}
 						onDownloadTranslation={props.onDownloadTranslation}
 						onDownloadOriginal={props.onDownloadOriginal}

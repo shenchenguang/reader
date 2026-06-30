@@ -6,6 +6,7 @@ import CustomSections from "./common/custom-sections";
 import { IconColor20 } from "./common/icons";
 
 import IconCheck12 from "../../../res/icons/12/check.svg";
+import IconCheck20 from "../../../res/icons/20/check.svg";
 import IconImage from "../../../res/icons/20/annotate-area.svg";
 import IconEraser from "../../../res/icons/20/annotate-eraser.svg";
 import IconHighlight from "../../../res/icons/20/annotate-highlight.svg";
@@ -21,6 +22,25 @@ import IconTranslate from "../../../res/icons/20/translate.svg";
 import IconZoomIn from "../../../res/icons/20/zoom-in.svg";
 import IconZoomOut from "../../../res/icons/20/zoom-out.svg";
 import IconChevronDown8 from "../../../res/icons/8/chevron-8.svg";
+
+const TRANSLATION_SERVICE_META = {
+	aegean: {
+		label: "学术翻译",
+		description: "适用于期刊论文与研究报告翻译，术语翻译规范严谨。",
+	},
+	zhipu: {
+		label: "流畅翻译",
+		description: "适用于学位论文与综述翻译，学科通用性强。",
+	},
+	siliconflow: {
+		label: "通用翻译",
+		description: "适用于全学科通用学术文本翻译。",
+	},
+};
+
+const TRANSLATION_GLOSSARY_ENABLED_KEY =
+	"reader-translation-glossary-enabled";
+const TRANSLATION_GLOSSARY_ID_KEY = "reader-translation-glossary-id";
 
 const TOOL_OPTIONS = [
 	{
@@ -124,6 +144,16 @@ function Toolbar(props) {
 	const translationServices = Array.isArray(props.translateList)
 		? props.translateList
 		: [];
+	const translationLanguages = Array.isArray(props.languageList)
+		? props.languageList
+		: [];
+	const sourceLanguages = translationLanguages;
+	const targetLanguages = translationLanguages.filter(
+		(language) => language.key !== "auto",
+	);
+	const glossaryList = Array.isArray(props.glossaryList)
+		? props.glossaryList
+		: [];
 	const { l10n } = useLocalization();
 	const hasTranslation =
 		props.showTranslationControls && translationServices.length > 0;
@@ -167,8 +197,40 @@ function Toolbar(props) {
 		return translationServices[0]?.key || null;
 	}
 
-	const [selectedTranslationService, setSelectedTranslationService] =
-		useState(getBestDefaultService);
+	const [translationParams, setTranslationParams] = useState(() => ({
+		lang_in: "auto",
+		lang_out: "zh",
+		engine: getBestDefaultService() || "",
+		pages: "",
+		glossaries: "",
+	}));
+	const [isGlossaryEnabled, setIsGlossaryEnabled] = useState(() => {
+		try {
+			return (
+				localStorage.getItem(TRANSLATION_GLOSSARY_ENABLED_KEY) ===
+				"true"
+			);
+		} catch (e) {}
+		return false;
+	});
+	const [selectedGlossaryId, setSelectedGlossaryId] = useState(() => {
+		try {
+			return (
+				localStorage.getItem(TRANSLATION_GLOSSARY_ID_KEY) ||
+				props.selectedGlossaryId ||
+				""
+			);
+		} catch (e) {}
+		return props.selectedGlossaryId || "";
+	});
+	const [pageMode, setPageMode] = useState("all");
+	const [startPage, setStartPage] = useState("");
+	const [endPage, setEndPage] = useState("");
+	const [singlePage, setSinglePage] = useState("");
+	const [activeTranslationSubmenu, setActiveTranslationSubmenu] =
+		useState(null);
+	const [activeTranslationSubmenuTop, setActiveTranslationSubmenuTop] =
+		useState(36);
 	const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 	const { platform } = useContext(ReaderContext);
 
@@ -187,20 +249,116 @@ function Toolbar(props) {
 
 	useEffect(() => {
 		if (!hasTranslation) {
-			setSelectedTranslationService(null);
+			setTranslationParams((prev) => ({ ...prev, engine: "" }));
 			setIsTranslationMenuOpen(false);
 			return;
 		}
-		setSelectedTranslationService((prev) => {
-			if (
-				prev &&
-				translationServices.some((service) => service.key === prev)
-			) {
+		setTranslationParams((prev) => {
+			if (translationServices.some((service) => service.key === prev.engine)) {
 				return prev;
 			}
-			return getBestDefaultService();
+			return { ...prev, engine: getBestDefaultService() || "" };
 		});
 	}, [hasTranslation, props.translateList]);
+
+	useEffect(() => {
+		if (!isGlossaryEnabled) {
+			updateTranslationParam("glossaries", "");
+			return;
+		}
+
+		const isCurrentValid = glossaryList.some(
+			(item) => item.id === selectedGlossaryId,
+		);
+		const isPropValid = glossaryList.some(
+			(item) => item.id === props.selectedGlossaryId,
+		);
+		const nextGlossaryId = isCurrentValid
+			? selectedGlossaryId
+			: isPropValid
+				? props.selectedGlossaryId
+				: glossaryList[0]?.id || "";
+
+		if (nextGlossaryId) {
+			if (nextGlossaryId !== selectedGlossaryId) {
+				setGlossarySelection(nextGlossaryId, false);
+			} else {
+				updateTranslationParam("glossaries", nextGlossaryId);
+			}
+		} else {
+			setSelectedGlossaryId("");
+			updateTranslationParam("glossaries", "");
+		}
+	}, [
+		isGlossaryEnabled,
+		props.glossaryList,
+		props.selectedGlossaryId,
+		selectedGlossaryId,
+	]);
+
+	function getTranslationServiceLabel(service) {
+		if (!service) {
+			return "";
+		}
+		return TRANSLATION_SERVICE_META[service.key]?.label || service.value || service.key;
+	}
+
+	function getTranslationServiceDescription(service) {
+		if (!service) {
+			return "";
+		}
+		return TRANSLATION_SERVICE_META[service.key]?.description || "";
+	}
+
+	function getLanguageLabel(languageKey) {
+		return (
+			translationLanguages.find((language) => language.key === languageKey)
+				?.value ||
+			languageKey ||
+			""
+		);
+	}
+
+	function getSelectedTranslationService() {
+		return translationParams.engine
+			? translationServices.find(
+					(service) => service.key === translationParams.engine,
+				) || { key: translationParams.engine }
+			: null;
+	}
+
+	function getSelectedGlossary() {
+		return glossaryList.find((item) => item.id === selectedGlossaryId);
+	}
+
+	function getPagesValue() {
+		if (pageMode === "single") {
+			return singlePage.trim();
+		}
+		if (pageMode === "range") {
+			const start = startPage.trim();
+			const end = endPage.trim();
+			if (start && end) {
+				return `${start}-${end}`;
+			}
+			if (start) {
+				return `${start}-`;
+			}
+			if (end) {
+				return `-${end}`;
+			}
+		}
+		return "";
+	}
+
+	function getPageRangeLabel() {
+		const pages = getPagesValue();
+		return pages || "全文";
+	}
+
+	function updateTranslationParam(key, value) {
+		setTranslationParams((prev) => ({ ...prev, [key]: value }));
+	}
 
 	function handleToolColorClick(event) {
 		let br = event.currentTarget.getBoundingClientRect();
@@ -277,12 +435,7 @@ function Toolbar(props) {
 
 	function handleTranslationAction() {
 		if (props.translationActive) {
-			const selectedService = selectedTranslationService
-				? translationServices.find(
-						(service) => service.key === selectedTranslationService,
-					) || { key: selectedTranslationService }
-				: null;
-			props.onStopTranslation?.(selectedService);
+			props.onStopTranslation?.(getSelectedTranslationService());
 			setIsTranslationMenuOpen(false);
 			return;
 		}
@@ -290,36 +443,116 @@ function Toolbar(props) {
 	}
 
 	function handleTranslationMenuToggle() {
-		setIsTranslationMenuOpen((prev) => !prev);
+		setIsTranslationMenuOpen((prev) => {
+			const next = !prev;
+			if (!next) {
+				setActiveTranslationSubmenu(null);
+			}
+			return next;
+		});
 	}
 
 	function handleStartTranslation() {
 		if (
 			!hasTranslation ||
-			!selectedTranslationService ||
+			!translationParams.engine ||
 			props.translationLoading
 		) {
 			return;
 		}
-		let selectedItem = translationServices.find(
-			(service) => service.key === selectedTranslationService,
-		);
+		let selectedItem = getSelectedTranslationService();
 		if (!selectedItem) {
 			return;
 		}
+		const pages = getPagesValue();
+		const glossaries =
+			isGlossaryEnabled && selectedGlossaryId ? selectedGlossaryId : "";
 		setIsTranslationMenuOpen(false);
+		setActiveTranslationSubmenu(null);
 		props.onStartTranslation?.(selectedItem, {
 			pagesCount: props.pagesCount,
+			lang_in: translationParams.lang_in,
+			lang_out: translationParams.lang_out,
+			engine: selectedItem.key,
+			pages,
+			glossaries,
 		});
 	}
 
 	function handleSelectTranslationService(serviceKey) {
-		setSelectedTranslationService(serviceKey);
+		updateTranslationParam("engine", serviceKey);
 		try {
 			localStorage.setItem("reader-translation-service-id", serviceKey);
 		} catch (e) {
 			// Ignore localStorage errors
 		}
+	}
+
+	function openTranslationSubmenu(submenu, event) {
+		setActiveTranslationSubmenu(submenu);
+		if (event?.currentTarget) {
+			setActiveTranslationSubmenuTop(event.currentTarget.offsetTop);
+		}
+	}
+
+	function setGlossarySelection(glossaryId, notifyHost = true) {
+		setSelectedGlossaryId(glossaryId);
+		updateTranslationParam(
+			"glossaries",
+			isGlossaryEnabled && glossaryId ? glossaryId : "",
+		);
+		try {
+			if (glossaryId) {
+				localStorage.setItem(TRANSLATION_GLOSSARY_ID_KEY, glossaryId);
+			} else {
+				localStorage.removeItem(TRANSLATION_GLOSSARY_ID_KEY);
+			}
+		} catch (e) {}
+		if (notifyHost && glossaryId) {
+			props.onSelectGlossary?.(glossaryId);
+		}
+	}
+
+	function handleGlossaryToggle(event) {
+		const enabled = event.target.checked;
+		setIsGlossaryEnabled(enabled);
+		try {
+			localStorage.setItem(
+				TRANSLATION_GLOSSARY_ENABLED_KEY,
+				String(enabled),
+			);
+		} catch (e) {}
+		if (!enabled) {
+			updateTranslationParam("glossaries", "");
+			setActiveTranslationSubmenu((submenu) =>
+				submenu === "glossary" ? null : submenu,
+			);
+			return;
+		}
+
+		const validSelectedId = glossaryList.some(
+			(item) => item.id === selectedGlossaryId,
+		)
+			? selectedGlossaryId
+			: "";
+		const nextGlossaryId = validSelectedId || glossaryList[0]?.id || "";
+		if (nextGlossaryId) {
+			setGlossarySelection(nextGlossaryId);
+			updateTranslationParam("glossaries", nextGlossaryId);
+			return;
+		}
+		props.onCreateGlossary?.();
+	}
+
+	function handleGlossaryRowOpen(event) {
+		if (!isGlossaryEnabled) {
+			return;
+		}
+		if (!glossaryList.length) {
+			props.onCreateGlossary?.();
+			return;
+		}
+		openTranslationSubmenu("glossary", event);
 	}
 
 	function handleDownloadMenuToggle() {
@@ -370,11 +603,13 @@ function Toolbar(props) {
 	const ActiveToolIcon = activeToolOption?.icon || IconHighlight;
 	const translationEngaged =
 		props.translationActive || props.translationLoading;
-	const translationLabel = props.translationLoading
-		? l10n.getString("reader-translation-loading")
-		: props.translationActive
-			? l10n.getString("reader-translation-stop")
-			: l10n.getString("reader-translation-full");
+		const translationLabel = props.translationLoading
+			? l10n.getString("reader-translation-loading")
+				: props.translationActive
+					? l10n.getString("reader-translation-stop")
+					: l10n.getString("reader-translation-full");
+		const selectedService = getSelectedTranslationService();
+		const selectedGlossary = getSelectedGlossary();
 
 	return (
 		<div className="toolbar" data-tabstop={1} role="application">
@@ -568,48 +803,168 @@ function Toolbar(props) {
 							<div
 								className="translation-dropdown-menu"
 								role="menu"
+								onMouseLeave={() =>
+									setActiveTranslationSubmenu(null)
+								}
 							>
 								{!translationEngaged && (
 									<>
-										<div className="translation-dropdown-label">
-											{l10n.getString(
-												"reader-translation-provider",
-											)}
+										<div className="translation-menu-section">
+											<div className="translation-dropdown-label">
+												源语言
+											</div>
+											<button
+												type="button"
+												className="translation-menu-row"
+													onClick={(event) =>
+														openTranslationSubmenu(
+															"lang_in",
+															event,
+														)
+													}
+													onMouseEnter={(event) =>
+														openTranslationSubmenu(
+															"lang_in",
+															event,
+														)
+													}
+											>
+												<span>
+													{getLanguageLabel(
+														translationParams.lang_in,
+													)}
+												</span>
+												<IconChevronDown8 className="translation-menu-row-icon" />
+											</button>
 										</div>
-										<div className="translation-dropdown-options">
-											{translationServices.map(
-												(service) => (
-													<button
-														type="button"
-														key={service.key}
-														className={cx(
-															"translation-option",
-															{
-																active:
-																	selectedTranslationService ===
-																	service.key,
-															},
-														)}
-														onClick={() =>
-															handleSelectTranslationService(
-																service.key,
-															)
-														}
-													>
-														<span>
-															{service.value ??
-																service.key}
-														</span>
-														{selectedTranslationService ===
-															service.key && (
-															<IconCheck12 className="translation-option-icon" />
-														)}
-													</button>
-												),
-											)}
+
+										<div className="translation-menu-section">
+											<div className="translation-dropdown-label">
+												翻译成
+											</div>
+											<button
+												type="button"
+												className="translation-menu-row"
+													onClick={(event) =>
+														openTranslationSubmenu(
+															"lang_out",
+															event,
+														)
+													}
+													onMouseEnter={(event) =>
+														openTranslationSubmenu(
+															"lang_out",
+															event,
+														)
+													}
+											>
+												<span>
+													{getLanguageLabel(
+														translationParams.lang_out,
+													)}
+												</span>
+												<IconChevronDown8 className="translation-menu-row-icon" />
+											</button>
 										</div>
-									</>
-								)}
+
+										<div className="translation-menu-divider" />
+
+										<button
+											type="button"
+											className="translation-menu-row plain"
+											onClick={(event) =>
+												openTranslationSubmenu(
+													"pages",
+													event,
+												)
+											}
+											onMouseEnter={(event) =>
+												openTranslationSubmenu(
+													"pages",
+													event,
+												)
+											}
+										>
+											<span className="translation-menu-row-label">
+												页码范围
+											</span>
+											<span className="translation-menu-row-value">
+												{getPageRangeLabel()}
+											</span>
+											<IconChevronDown8 className="translation-menu-row-icon" />
+										</button>
+
+										<div className="translation-menu-divider" />
+
+										<button
+											type="button"
+											className="translation-menu-row plain"
+											onClick={(event) =>
+												openTranslationSubmenu(
+													"engine",
+													event,
+												)
+											}
+											onMouseEnter={(event) =>
+												openTranslationSubmenu(
+													"engine",
+													event,
+												)
+											}
+										>
+											<span className="translation-menu-row-label">
+												翻译服务
+											</span>
+											<span className="translation-menu-row-value">
+												{getTranslationServiceLabel(
+													selectedService,
+												)}
+											</span>
+											<IconChevronDown8 className="translation-menu-row-icon" />
+										</button>
+										<div className="translation-menu-help">
+											如果需要翻译论文和专业文档，可以选择学术翻译，提供更准确的解析。
+										</div>
+
+											<div className="translation-glossary-header">
+												<div className="translation-glossary-title">
+													术语库
+												</div>
+												<label className="translation-switch">
+													<input
+														type="checkbox"
+														checked={isGlossaryEnabled}
+														onChange={handleGlossaryToggle}
+													/>
+													<span />
+												</label>
+											</div>
+											{isGlossaryEnabled && (
+												<button
+													type="button"
+													className="translation-menu-row translation-glossary-select-row"
+													onClick={handleGlossaryRowOpen}
+														onMouseEnter={(event) => {
+															if (glossaryList.length) {
+																openTranslationSubmenu(
+																	"glossary",
+																	event,
+																);
+															}
+														}}
+												>
+													<span>
+														{selectedGlossary?.name ||
+															"新建术语库"}
+													</span>
+													<IconChevronDown8 className="translation-menu-row-icon" />
+												</button>
+											)}
+											<div className="translation-menu-help">
+												定义词组或短语翻译规则，翻译时将融合进译文结果。
+											</div>
+										</>
+									)}
 
 								{!translationEngaged && (
 									<button
@@ -617,7 +972,7 @@ function Toolbar(props) {
 										className="translation-start-button"
 										onClick={handleStartTranslation}
 										disabled={
-											!selectedTranslationService ||
+											!translationParams.engine ||
 											props.translationLoading
 										}
 									>
@@ -626,6 +981,320 @@ function Toolbar(props) {
 										)}
 									</button>
 								)}
+
+								{!translationEngaged &&
+									activeTranslationSubmenu && (
+											<div
+												className={cx(
+													"translation-submenu",
+													activeTranslationSubmenu,
+												)}
+												style={{
+													top: activeTranslationSubmenuTop,
+												}}
+												onMouseLeave={() =>
+													setActiveTranslationSubmenu(
+														null,
+													)
+												}
+											>
+											{activeTranslationSubmenu ===
+												"lang_in" && (
+												<div className="translation-submenu-list">
+													{sourceLanguages.map(
+														(language) => (
+															<button
+																type="button"
+																key={
+																	language.key
+																}
+																className={cx(
+																	"translation-submenu-option",
+																	{
+																		active:
+																			translationParams.lang_in ===
+																			language.key,
+																	},
+																)}
+																onClick={() =>
+																	updateTranslationParam(
+																		"lang_in",
+																		language.key,
+																	)
+																}
+															>
+																<span>
+																	{
+																		language.value
+																	}
+																</span>
+																{translationParams.lang_in ===
+																	language.key && (
+																	<IconCheck12 className="translation-option-icon" />
+																)}
+															</button>
+														),
+													)}
+												</div>
+											)}
+
+											{activeTranslationSubmenu ===
+												"lang_out" && (
+												<div className="translation-submenu-list">
+													{targetLanguages.map(
+														(language) => (
+															<button
+																type="button"
+																key={
+																	language.key
+																}
+																className={cx(
+																	"translation-submenu-option",
+																	{
+																		active:
+																			translationParams.lang_out ===
+																			language.key,
+																	},
+																)}
+																onClick={() =>
+																	updateTranslationParam(
+																		"lang_out",
+																		language.key,
+																	)
+																}
+															>
+																<span>
+																	{
+																		language.value
+																	}
+																</span>
+																{translationParams.lang_out ===
+																	language.key && (
+																	<IconCheck12 className="translation-option-icon" />
+																)}
+															</button>
+														),
+													)}
+												</div>
+											)}
+
+											{activeTranslationSubmenu ===
+												"pages" && (
+												<div className="translation-pages-panel">
+													<button
+														type="button"
+														className={cx(
+															"translation-submenu-option",
+															{
+																active:
+																	pageMode ===
+																	"all",
+															},
+														)}
+														onClick={() =>
+															setPageMode("all")
+														}
+													>
+														<span>全文</span>
+															{pageMode ===
+																"all" && (
+																<IconCheck20 className="translation-page-check-icon" />
+															)}
+													</button>
+														<div
+															className={cx(
+																"translation-pages-title",
+																{
+																	active:
+																		pageMode ===
+																		"range",
+																},
+															)}
+														>
+															<span>页码范围</span>
+															{pageMode ===
+																"range" && (
+																<IconCheck20 className="translation-page-check-icon" />
+															)}
+														</div>
+													<div className="translation-range-inputs">
+														<input
+															type="text"
+															inputMode="numeric"
+															placeholder="起始页"
+															value={startPage}
+															onFocus={() =>
+																setPageMode(
+																	"range",
+																)
+															}
+																onChange={(event) => {
+																	setPageMode(
+																		"range",
+																	);
+																	setStartPage(
+																		event.target
+																			.value,
+																	);
+																}}
+														/>
+														<span>-</span>
+														<input
+															type="text"
+															inputMode="numeric"
+															placeholder="终止页"
+															value={endPage}
+															onFocus={() =>
+																setPageMode(
+																	"range",
+																)
+															}
+																onChange={(event) => {
+																	setPageMode(
+																		"range",
+																	);
+																	setEndPage(
+																		event.target
+																			.value,
+																	);
+																}}
+														/>
+													</div>
+														<div
+															className={cx(
+																"translation-pages-title",
+																{
+																	active:
+																		pageMode ===
+																		"single",
+																},
+															)}
+														>
+															<span>单页翻译</span>
+																{pageMode ===
+																	"single" && (
+																	<IconCheck20 className="translation-page-check-icon" />
+																)}
+														</div>
+													<input
+														type="text"
+														inputMode="numeric"
+														className="translation-single-page-input"
+														placeholder="输入单页页码"
+														value={singlePage}
+														onFocus={() =>
+															setPageMode(
+																"single",
+															)
+														}
+															onChange={(event) => {
+																setPageMode(
+																	"single",
+																);
+																setSinglePage(
+																	event.target.value,
+																);
+															}}
+													/>
+													<div className="translation-pages-note">
+														说明：
+														<br />
+														填入的页码范围或单页均为 PDF 页数，并非 PDF 内容中的具体页码
+													</div>
+												</div>
+											)}
+
+												{activeTranslationSubmenu ===
+													"engine" && (
+													<div className="translation-service-panel">
+														{translationServices.map(
+															(service) => (
+															<button
+																type="button"
+																key={
+																	service.key
+																}
+																className={cx(
+																	"translation-service-option",
+																	{
+																		active:
+																			translationParams.engine ===
+																			service.key,
+																	},
+																)}
+																onClick={() =>
+																	handleSelectTranslationService(
+																		service.key,
+																	)
+																}
+															>
+																<div>
+																	<div className="translation-service-title">
+																		{getTranslationServiceLabel(
+																			service,
+																		)}
+																	</div>
+																	<div className="translation-service-description">
+																		{getTranslationServiceDescription(
+																			service,
+																		)}
+																	</div>
+																</div>
+																{translationParams.engine ===
+																	service.key && (
+																	<IconCheck12 className="translation-option-icon" />
+																)}
+															</button>
+														),
+														)}
+													</div>
+												)}
+
+												{activeTranslationSubmenu ===
+													"glossary" && (
+													<div className="translation-submenu-list translation-glossary-list">
+														{glossaryList.map((item) => (
+															<button
+																type="button"
+																key={item.id}
+																className={cx(
+																	"translation-submenu-option",
+																	{
+																		active:
+																			selectedGlossaryId ===
+																			item.id,
+																	},
+																)}
+																onClick={() =>
+																	setGlossarySelection(
+																		item.id,
+																	)
+																}
+															>
+																<span>{item.name}</span>
+																{selectedGlossaryId ===
+																	item.id && (
+																	<IconCheck12 className="translation-option-icon" />
+																)}
+															</button>
+														))}
+														<div className="translation-menu-divider" />
+														<button
+															type="button"
+															className="translation-glossary-add-option"
+															onClick={() =>
+																props.onCreateGlossary?.()
+															}
+														>
+															<span className="translation-glossary-add-icon">
+																+
+															</span>
+															<span>添加术语库</span>
+														</button>
+													</div>
+												)}
+											</div>
+										)}
 							</div>
 						)}
 					</div>
