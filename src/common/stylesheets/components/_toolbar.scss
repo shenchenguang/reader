@@ -321,7 +321,7 @@
 				position: absolute;
 				top: calc(100% + 8px);
 				left: 0;
-				width: 238px;
+				width: 220px;
 				box-sizing: border-box;
 				background: #fff;
 				border: var(--material-border);
@@ -339,6 +339,7 @@
 	.translation-dropdown-label {
 		font-size: 12px;
 		color: var(--fill-secondary);
+		margin-bottom: 2px;
 	}
 
 		.translation-menu-section {
@@ -422,9 +423,9 @@
 				line-height: 18px;
 			}
 
-			.translation-glossary-select-row {
-				margin-top: -2px;
-			}
+			// .translation-glossary-select-row {
+			// 	margin-top: -2px;
+			// }
 
 		.translation-switch {
 			position: relative;
