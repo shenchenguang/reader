@@ -224,15 +224,18 @@ function Toolbar(props) {
 		return props.selectedGlossaryId || "";
 	});
 	const [pageMode, setPageMode] = useState("all");
-	const [startPage, setStartPage] = useState("");
-	const [endPage, setEndPage] = useState("");
-	const [singlePage, setSinglePage] = useState("");
+	const [customPages, setCustomPages] = useState("");
 	const [activeTranslationSubmenu, setActiveTranslationSubmenu] =
 		useState(null);
 	const [activeTranslationSubmenuTop, setActiveTranslationSubmenuTop] =
 		useState(36);
 	const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 	const { platform } = useContext(ReaderContext);
+	const isCustomPagesRequired = props.pagesCount > 100;
+	const isStartTranslationDisabled =
+		!translationParams.engine ||
+		props.translationLoading ||
+		(isCustomPagesRequired && !customPages.trim());
 
 	useDropdownAutoClose(sidebarDropdownRef, isSidebarDropdownOpen, () =>
 		setIsSidebarDropdownOpen(false),
@@ -296,6 +299,12 @@ function Toolbar(props) {
 		selectedGlossaryId,
 	]);
 
+	useEffect(() => {
+		if (isCustomPagesRequired) {
+			setPageMode("custom");
+		}
+	}, [isCustomPagesRequired]);
+
 	function getTranslationServiceLabel(service) {
 		if (!service) {
 			return "";
@@ -332,28 +341,18 @@ function Toolbar(props) {
 	}
 
 	function getPagesValue() {
-		if (pageMode === "single") {
-			return singlePage.trim();
-		}
-		if (pageMode === "range") {
-			const start = startPage.trim();
-			const end = endPage.trim();
-			if (start && end) {
-				return `${start}-${end}`;
-			}
-			if (start) {
-				return `${start}-`;
-			}
-			if (end) {
-				return `-${end}`;
-			}
+		if (isCustomPagesRequired || pageMode === "custom") {
+			return customPages.trim();
 		}
 		return "";
 	}
 
 	function getPageRangeLabel() {
 		const pages = getPagesValue();
-		return pages || "全文";
+		if (pages) {
+			return pages;
+		}
+		return pageMode === "custom" ? "自定义" : "全部";
 	}
 
 	function updateTranslationParam(key, value) {
@@ -456,7 +455,8 @@ function Toolbar(props) {
 		if (
 			!hasTranslation ||
 			!translationParams.engine ||
-			props.translationLoading
+			props.translationLoading ||
+			(isCustomPagesRequired && !customPages.trim())
 		) {
 			return;
 		}
@@ -971,10 +971,7 @@ function Toolbar(props) {
 										type="button"
 										className="translation-start-button"
 										onClick={handleStartTranslation}
-										disabled={
-											!translationParams.engine ||
-											props.translationLoading
-										}
+										disabled={isStartTranslationDisabled}
 									>
 										{l10n.getString(
 											"reader-translation-start",
@@ -1094,112 +1091,57 @@ function Toolbar(props) {
 														onClick={() =>
 															setPageMode("all")
 														}
+														disabled={
+															isCustomPagesRequired
+														}
 													>
-														<span>全文</span>
+														<span>全部</span>
 															{pageMode ===
 																"all" && (
 																<IconCheck20 className="translation-page-check-icon" />
 															)}
 													</button>
-														<div
-															className={cx(
-																"translation-pages-title",
-																{
-																	active:
-																		pageMode ===
-																		"range",
-																},
-															)}
-														>
-															<span>页码范围</span>
+													<button
+														type="button"
+														className={cx(
+															"translation-submenu-option",
+															{
+																active:
+																	pageMode ===
+																	"custom",
+															},
+														)}
+														onClick={() =>
+															setPageMode("custom")
+														}
+													>
+														<span>自定义</span>
 															{pageMode ===
-																"range" && (
+																"custom" && (
 																<IconCheck20 className="translation-page-check-icon" />
 															)}
-														</div>
-													<div className="translation-range-inputs">
+													</button>
+													{pageMode === "custom" && (
 														<input
 															type="text"
-															inputMode="numeric"
-															placeholder="起始页"
-															value={startPage}
-															onFocus={() =>
-																setPageMode(
-																	"range",
-																)
-															}
-																onChange={(event) => {
-																	setPageMode(
-																		"range",
-																	);
-																	setStartPage(
-																		event.target
-																			.value,
-																	);
-																}}
-														/>
-														<span>-</span>
-														<input
-															type="text"
-															inputMode="numeric"
-															placeholder="终止页"
-															value={endPage}
-															onFocus={() =>
-																setPageMode(
-																	"range",
-																)
-															}
-																onChange={(event) => {
-																	setPageMode(
-																		"range",
-																	);
-																	setEndPage(
-																		event.target
-																			.value,
-																	);
-																}}
-														/>
-													</div>
-														<div
-															className={cx(
-																"translation-pages-title",
-																{
-																	active:
-																		pageMode ===
-																		"single",
-																},
-															)}
-														>
-															<span>单页翻译</span>
-																{pageMode ===
-																	"single" && (
-																	<IconCheck20 className="translation-page-check-icon" />
-																)}
-														</div>
-													<input
-														type="text"
-														inputMode="numeric"
-														className="translation-single-page-input"
-														placeholder="输入单页页码"
-														value={singlePage}
-														onFocus={() =>
-															setPageMode(
-																"single",
-															)
-														}
+															inputMode="text"
+															className="translation-custom-pages-input"
+															placeholder="例如：1,2,1-,-3,3-5"
+															value={customPages}
 															onChange={(event) => {
-																setPageMode(
-																	"single",
-																);
-																setSinglePage(
+																setCustomPages(
 																	event.target.value,
 																);
 															}}
-													/>
+															autoFocus
+														/>
+													)}
 													<div className="translation-pages-note">
 														说明：
 														<br />
-														填入的页码范围或单页均为 PDF 页数，并非 PDF 内容中的具体页码
+														{isCustomPagesRequired
+															? "超过 100 页时必须填写页码范围；支持单页、闭合范围和开放式范围"
+															: "支持单页、闭合范围和开放式范围；留空表示全部页面"}
 													</div>
 												</div>
 											)}

@@ -562,24 +562,24 @@
 		&.active {
 			color: #409eff;
 		}
+
+		&:disabled {
+			color: #a7adb5;
+			cursor: not-allowed;
+		}
+
+		&:disabled:hover {
+			background: transparent;
+		}
 	}
 
-				.translation-pages-title,
 				.translation-pages-panel .translation-submenu-option {
+					width: calc(100% + 24px);
+					margin: 0 -12px;
+					padding: 6px 12px;
 					font-size: 14px;
 					font-weight: 600;
 					line-height: 20px;
-				}
-
-				.translation-pages-title {
-					color: var(--color-text);
-					display: flex;
-					align-items: center;
-					justify-content: space-between;
-				}
-
-				.translation-pages-title.active {
-					color: #409eff;
 				}
 
 				.translation-pages-panel .translation-submenu-option span {
@@ -594,61 +594,25 @@
 					flex: 0 0 20px;
 				}
 
-			.translation-range-inputs {
-				display: flex;
-				align-items: center;
-				gap: 8px;
-
-				span {
-					flex: 0 0 auto;
-					color: var(--color-text);
-					font-size: 14px;
-					font-weight: 700;
-					line-height: 1;
-				}
-
-				input {
-					flex: 1 1 0;
-					width: auto;
-					min-width: 0;
-					height: 32px;
-					box-sizing: border-box;
-					border: 1px solid #d1d5db;
+			.translation-custom-pages-input {
+				width: 100%;
+				height: 32px;
+				box-sizing: border-box;
+				border: 1px solid #d1d5db;
 				border-radius: 7px;
 				color: var(--color-text);
 				text-align: center;
 				font-size: 12px;
 				outline: none;
 
-			&:focus {
-				border-color: #409eff;
+				&:focus {
+					border-color: #409eff;
+				}
+
+				&::placeholder {
+					color: #a7adb5;
+				}
 			}
-
-			&::placeholder {
-				color: #a7adb5;
-			}
-		}
-	}
-
-		.translation-single-page-input {
-			width: 100%;
-			height: 32px;
-			box-sizing: border-box;
-			border: 1px solid #d1d5db;
-			border-radius: 7px;
-			color: var(--color-text);
-			text-align: center;
-			font-size: 12px;
-			outline: none;
-
-		&:focus {
-			border-color: #409eff;
-		}
-
-		&::placeholder {
-			color: #a7adb5;
-		}
-	}
 
 			.translation-pages-note {
 				color: var(--fill-secondary);
